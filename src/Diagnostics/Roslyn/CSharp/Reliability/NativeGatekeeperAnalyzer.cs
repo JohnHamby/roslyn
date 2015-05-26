@@ -189,8 +189,20 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
 
         private void AnalyzeArrayTypeSyntax(SyntaxNodeAnalysisContext context, ArrayTypeSyntax arrayTypeSyntax)
         {
-            ITypeSymbol type = context.SemanticModel.GetTypeInfo(arrayTypeSyntax).Type;
-            AnalyzeArrayType(type, arrayTypeSyntax.GetLocation(), context.ReportDiagnostic);
+            for (int index = 0; index < arrayTypeSyntax.RankSpecifiers.Count; index++)
+            {
+                ArrayRankSpecifierSyntax rankSpecifier = arrayTypeSyntax.RankSpecifiers[index];
+                if (rankSpecifier.Rank > 4)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(ArrayMoreThanFourDimensionsDescriptor, rankSpecifier.GetLocation()));
+                }
+            }
+
+            ITypeSymbol elementType = context.SemanticModel.GetTypeInfo(arrayTypeSyntax.ElementType).Type;
+            if (elementType.TypeKind == TypeKind.Pointer)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(ArrayPointerElementDescriptor, arrayTypeSyntax.GetLocation()));
+            }
         }
 
         private void AnalyzeArrayType(ITypeSymbol type, ImmutableArray<Location> locations, Action<Diagnostic> reportDiagnostic)

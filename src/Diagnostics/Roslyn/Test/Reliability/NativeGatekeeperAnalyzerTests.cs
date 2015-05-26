@@ -32,10 +32,10 @@ class C
     int[,,,,] fieldTooMany;
 
     int[,,,] MethodOK(int[,,,] paramOK) { return null; }
-    int[,,,,] MethodTooMany(int[,,,,] paramOK) { return null; }
+    int[,,,,] MethodTooMany(int[,,,,] paramTooMany) { return null; }
 
     int[,,,] PropertyOK { get { return null; } }
-    int[,,,,] PropertyTooLong { get { return null; } }
+    int[,,,,] PropertyTooMany { get { return null; } }
 
     void Test() 
     {
@@ -55,13 +55,58 @@ class C
 
             VerifyCSharp(
                 code,
-                GetCSharpResultAt(8, 5, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
-                GetCSharpResultAt(11, 5, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
-                GetCSharpResultAt(11, 29, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
-                GetCSharpResultAt(14, 5, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
-                GetCSharpResultAt(19, 9, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
-                GetCSharpResultAt(22, 36, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
-                GetCSharpResultAt(25, 11, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor));
+                GetCSharpResultAt(8, 8, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
+                GetCSharpResultAt(11, 8, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
+                GetCSharpResultAt(11, 32, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
+                GetCSharpResultAt(14, 8, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
+                GetCSharpResultAt(19, 12, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
+                GetCSharpResultAt(22, 39, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor),
+                GetCSharpResultAt(25, 14, NativeGatekeeperAnalyzer.ArrayMoreThanFourDimensionsDescriptor));
+        }
+
+        [Fact]
+        public void ArrayOfPointer()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+
+unsafe class C
+{
+    int[] fieldOK;
+    int*[] fieldArrayPointer;
+
+    int[] MethodOK(int[] paramOK) { return null; }
+    int*[] MethodArrayPointer(int*[] paramArrayPointer) { return null; }
+
+    int[] PropertyOK { get { return null; } }
+    int*[] PropertyArrayPointer { get { return null; } }
+
+    void Test() 
+    {
+        int[] localOK;
+        int*[] localArrayPointer;
+
+        object createOK = new int[] { };
+        object createArrayPointer = new int*[] { };
+
+        F<int[]>();
+        F<int*[]>();
+    }
+
+    void F<T>() {}
+}
+";
+
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(8, 5, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor),
+                GetCSharpResultAt(11, 5, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor),
+                GetCSharpResultAt(11, 31, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor),
+                GetCSharpResultAt(14, 5, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor),
+                GetCSharpResultAt(19, 9, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor),
+                GetCSharpResultAt(22, 41, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor),
+                GetCSharpResultAt(25, 11, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor));
         }
     }
 }
