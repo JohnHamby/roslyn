@@ -108,5 +108,29 @@ unsafe class C
                 GetCSharpResultAt(22, 41, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor),
                 GetCSharpResultAt(25, 11, NativeGatekeeperAnalyzer.ArrayPointerElementDescriptor));
         }
+
+        [Fact]
+        public void IEquatableEquals()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+
+class OK : System.IEquatable<OK>
+{
+    public bool Equals(OK other) { return true; }
+    public override bool Equals(object other) { return true; }
+}
+
+class FailsToOverride : System.IEquatable<FailsToOverride>
+{
+    public bool Equals(FailsToOverride other) { return true; }
+}
+";
+
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(11, 7, NativeGatekeeperAnalyzer.IEquatableEqualsDescriptor));
+        }
     }
 }

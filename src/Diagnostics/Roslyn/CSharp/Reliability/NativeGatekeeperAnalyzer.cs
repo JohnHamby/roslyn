@@ -14,6 +14,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
     {
         private static readonly LocalizableString s_localizableArrayPointerElementMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeArrayPointerElementMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
         private static readonly LocalizableString s_localizableArrayMoreThanFourDimensionsMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeArrayMoreThanFourDimensionsMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        private static readonly LocalizableString s_localizableIEquatableEqualsMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeIEquatableEqualsMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
 
         public static readonly DiagnosticDescriptor ArrayPointerElementDescriptor = new DiagnosticDescriptor(
             RoslynDiagnosticIds.NetNativeArrayPointerElementRuleId,
@@ -31,17 +32,24 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);
 
+        public static readonly DiagnosticDescriptor IEquatableEqualsDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeIEquatableEqualsRuleId,
+            s_localizableIEquatableEqualsMessageAndTitle,
+            s_localizableIEquatableEqualsMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics
         {
             get
             {
-                return ImmutableArray.Create(ArrayPointerElementDescriptor, ArrayMoreThanFourDimensionsDescriptor);
+                return ImmutableArray.Create(ArrayPointerElementDescriptor, ArrayMoreThanFourDimensionsDescriptor, IEquatableEqualsDescriptor);
             }
         }
 
         public override void Initialize(AnalysisContext context)
         {
-#if false
             context.RegisterSymbolAction(
                 (symbolContext) =>
                 {
@@ -90,7 +98,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     AnalyzeTypeArguments(nodeContext, (TypeArgumentListSyntax)nodeContext.Node);
                 },
                 SyntaxKind.TypeArgumentList);
-#endif
+
             context.RegisterSyntaxNodeAction(
               (nodeContext) =>
               {
@@ -98,19 +106,38 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
               },
               SyntaxKind.ArrayType);
 
-            // context.RegisterCompilationStartAction(OnCompilationStart);
+            context.RegisterCompilationStartAction(OnCompilationStart);
         }
 
-#if false
         private void OnCompilationStart(CompilationStartAnalysisContext context)
         {
-            var immutableArrayType = context.Compilation.GetTypeByMetadataName(ImmutableArrayMetadataName);
-            if (immutableArrayType != null)
+            INamedTypeSymbol systemObject = context.Compilation.GetTypeByMetadataName("System.Object");
+            if (systemObject != null)
             {
-                context.RegisterSyntaxNodeAction(syntaxContext => AnalyzeCall(syntaxContext, immutableArrayType), SyntaxKind.InvocationExpression);
+                IMethodSymbol objectEquals = null;
+                foreach (ISymbol equals in systemObject.GetMembers("Equals"))
+                {
+                    if (equals.Kind == SymbolKind.Method)
+                    {
+                        IMethodSymbol equalsMethod = (IMethodSymbol)equals;
+                        if (equalsMethod.IsVirtual && equalsMethod.Parameters.Length == 1)
+                        {
+                            objectEquals = equalsMethod;
+                            break;
+                        }
+                    }
+                }
+
+                INamedTypeSymbol iEquatable = context.Compilation.GetTypeByMetadataName("System.IEquatable`1");
+
+                if (iEquatable != null && objectEquals != null)
+                {
+                    context.RegisterSymbolAction(symbolContext => AnalyzeTypeForIEquatable(symbolContext, (INamedTypeSymbol)symbolContext.Symbol, iEquatable, objectEquals), SymbolKind.NamedType);
+                }
             }
         }
 
+#if false
         private void AnalyzeCall(SyntaxNodeAnalysisContext context, ISymbol immutableArrayType)
         {
             var invokeSyntax = context.Node as InvocationExpressionSyntax;
@@ -135,38 +162,62 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
         }
 #endif
 
+        private void AnalyzeTypeForIEquatable(SymbolAnalysisContext context, INamedTypeSymbol namedType, INamedTypeSymbol iEquatable, IMethodSymbol objectEquals)
+        {
+            if (namedType.TypeKind == TypeKind.Class)
+            {
+                foreach (INamedTypeSymbol implemented in namedType.Interfaces)
+                {
+                    if (implemented.OriginalDefinition.Equals(iEquatable))
+                    {
+                        // Type implements System.IEquatable<T>.
+                        foreach (ISymbol member in namedType.GetMembers("Equals"))
+                        {
+                            if (member.Kind == SymbolKind.Method)
+                            {
+                                IMethodSymbol overriddenMethod = ((IMethodSymbol)member).OverriddenMethod;
+                                if (overriddenMethod != null && overriddenMethod.Equals(objectEquals))
+                                {
+                                    // Type overrides Object.Equals(object).
+                                    return;
+                                }
+                            }
+                        }
+
+                        // Type does not override Object.Equals(object).
+                        context.ReportDiagnostic(Diagnostic.Create(IEquatableEqualsDescriptor, namedType.Locations[0]));
+                    }
+                }
+            }
+        }
+
         private void AnalyzeField(SymbolAnalysisContext context, IFieldSymbol field)
         {
-            AnalyzeArrayType(field.Type, field.Locations, context.ReportDiagnostic);
+           
         }
 
         private void AnalyzeMethod(SymbolAnalysisContext context, IMethodSymbol method)
         {
             if (method.MethodKind != MethodKind.PropertyGet && method.MethodKind != MethodKind.PropertySet)
             {
-                AnalyzeArrayType(method.ReturnType, method.Locations, context.ReportDiagnostic);
                 foreach (IParameterSymbol parameter in method.Parameters)
                 {
-                    AnalyzeArrayType(parameter.Type, parameter.Locations, context.ReportDiagnostic);
                 }
             }
         }
 
         private void AnalyzeProperty(SymbolAnalysisContext context, IPropertySymbol property)
         {
-            AnalyzeArrayType(property.Type, property.Locations, context.ReportDiagnostic);
         }
 
         private void AnalyzeArrayCreation(SyntaxNodeAnalysisContext context, ArrayCreationExpressionSyntax arrayCreation)
         {
-            TypeInfo arrayTypeInfo = context.SemanticModel.GetTypeInfo(arrayCreation);
-            AnalyzeArrayType(arrayTypeInfo.Type, arrayCreation.GetLocation(), context.ReportDiagnostic);
+          
         }
 
         private void AnalyzeArrayElementReference(SyntaxNodeAnalysisContext context, ElementAccessExpressionSyntax elementAccess)
         {
-            TypeInfo arrayTypeInfo = context.SemanticModel.GetTypeInfo(elementAccess.Expression);
-            AnalyzeArrayType(arrayTypeInfo.Type, elementAccess.Expression.GetLocation(), context.ReportDiagnostic);
+           
         }
 
         private void AnalyzeLocalDeclaration(SyntaxNodeAnalysisContext context, LocalDeclarationStatementSyntax declaration)
@@ -174,7 +225,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             foreach (VariableDeclaratorSyntax declarator in declaration.Declaration.Variables)
             {
                 ILocalSymbol local = (ILocalSymbol)context.SemanticModel.GetDeclaredSymbol(declarator);
-                AnalyzeArrayType(local.Type, declarator.GetLocation(), context.ReportDiagnostic);
+            
             }
         }
 
@@ -183,15 +234,14 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             foreach (TypeSyntax typeSyntax in argumentList.Arguments)
             {
                 ITypeSymbol type = context.SemanticModel.GetTypeInfo(typeSyntax).Type;
-                AnalyzeArrayType(type, typeSyntax.GetLocation(), context.ReportDiagnostic);
+               
             }
         }
 
         private void AnalyzeArrayTypeSyntax(SyntaxNodeAnalysisContext context, ArrayTypeSyntax arrayTypeSyntax)
         {
-            for (int index = 0; index < arrayTypeSyntax.RankSpecifiers.Count; index++)
+            foreach (ArrayRankSpecifierSyntax rankSpecifier in arrayTypeSyntax.RankSpecifiers)
             {
-                ArrayRankSpecifierSyntax rankSpecifier = arrayTypeSyntax.RankSpecifiers[index];
                 if (rankSpecifier.Rank > 4)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(ArrayMoreThanFourDimensionsDescriptor, rankSpecifier.GetLocation()));
@@ -202,32 +252,6 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             if (elementType.TypeKind == TypeKind.Pointer)
             {
                 context.ReportDiagnostic(Diagnostic.Create(ArrayPointerElementDescriptor, arrayTypeSyntax.GetLocation()));
-            }
-        }
-
-        private void AnalyzeArrayType(ITypeSymbol type, ImmutableArray<Location> locations, Action<Diagnostic> reportDiagnostic)
-        {
-            AnalyzeArrayType(type, locations[0], reportDiagnostic);
-        }
-
-        private void AnalyzeArrayType(ITypeSymbol type, Location location, Action<Diagnostic> reportDiagnostic)
-        {
-            if (type.TypeKind == TypeKind.Array)
-            {
-                AnalyzeArrayType((IArrayTypeSymbol)type, location, reportDiagnostic);
-            }
-        }
-
-        private void AnalyzeArrayType(IArrayTypeSymbol arrayType, Location location, Action<Diagnostic> reportDiagnostic)
-        {
-            if (arrayType.ElementType.TypeKind == TypeKind.Pointer)
-            {
-                reportDiagnostic(Diagnostic.Create(ArrayPointerElementDescriptor, location));
-            }
-
-            if (arrayType.Rank > 4)
-            {
-                reportDiagnostic(Diagnostic.Create(ArrayMoreThanFourDimensionsDescriptor, location));
             }
         }
     }

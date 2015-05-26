@@ -273,4 +273,7 @@
   <data name="NetNativeArrayPointerElementMessage" xml:space="preserve">
     <value>.Net Native does not support array types with pointer element types.</value>
   </data>
+  <data name="NetNativeIEquatableEqualsMessage" xml:space="preserve">
+    <value>.Net Native requires that a class that implements System.IEquatable&lt;T&gt; must also override Object.Equals(object).</value>
+  </data>
 </root>

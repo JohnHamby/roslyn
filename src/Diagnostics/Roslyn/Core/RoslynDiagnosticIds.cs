@@ -31,5 +31,6 @@ namespace Roslyn.Diagnostics.Analyzers
 
         public const string NetNativeArrayPointerElementRuleId = "RS1000";
         public const string NetNativeArrayMoreThanFourDimensionsRuleId = "RS1001";
+        public const string NetNativeIEquatableEqualsRuleId = "RS1002";
     }
 }

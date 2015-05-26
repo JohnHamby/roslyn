@@ -322,6 +322,15 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native requires that a class that implements System.IEquatable&lt;T&gt; must also override Object.Equals(object)..
+        /// </summary>
+        internal static string NetNativeIEquatableEqualsMessage {
+            get {
+                return ResourceManager.GetString("NetNativeIEquatableEqualsMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Override Object.Equals(object) when implementing IEquatable&lt;T&gt; .
         /// </summary>
         internal static string OverrideObjectEqualsDescription {
