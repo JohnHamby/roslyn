@@ -267,4 +267,10 @@
   <data name="SymbolDeclaredEventRuleDescription" xml:space="preserve">
     <value>Compilation event queue is required to generate symbol declared events for all declared source symbols. Hence, every source symbol type or one of it's base types must generate a symbol declared event.</value>
   </data>
+  <data name="NetNativeArrayMoreThanFourDimensionsMessage" xml:space="preserve">
+    <value>.Net Native does not support array types with more than four dimensions.</value>
+  </data>
+  <data name="NetNativeArrayPointerElementMessage" xml:space="preserve">
+    <value>.Net Native does not support array types with pointer element types.</value>
+  </data>
 </root>

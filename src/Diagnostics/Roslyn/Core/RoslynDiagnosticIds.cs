@@ -26,5 +26,10 @@ namespace Roslyn.Diagnostics.Analyzers
         public const string SymbolDeclaredEventRuleId = "RS0019";
         public const string DeadCodeRuleId = "RS0020";
         public const string DeadCodeTriggerRuleId = "RS0021";
+
+        // .Net Native diagnostics
+
+        public const string NetNativeArrayPointerElementRuleId = "RS1000";
+        public const string NetNativeArrayMoreThanFourDimensionsRuleId = "RS1001";
     }
 }
