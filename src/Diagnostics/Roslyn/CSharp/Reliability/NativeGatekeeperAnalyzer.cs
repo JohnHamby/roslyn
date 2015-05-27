@@ -1,6 +1,5 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -11,106 +10,55 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
 {
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class NativeGatekeeperAnalyzer : DiagnosticAnalyzer
-    {
-        private static readonly LocalizableString s_localizableArrayPointerElementMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeArrayPointerElementMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
-        private static readonly LocalizableString s_localizableArrayMoreThanFourDimensionsMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeArrayMoreThanFourDimensionsMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
-        private static readonly LocalizableString s_localizableIEquatableEqualsMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeIEquatableEqualsMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
-
-        public static readonly DiagnosticDescriptor ArrayPointerElementDescriptor = new DiagnosticDescriptor(
-            RoslynDiagnosticIds.NetNativeArrayPointerElementRuleId,
-            s_localizableArrayPointerElementMessageAndTitle,
-            s_localizableArrayPointerElementMessageAndTitle,
-            "Reliability",
-            DiagnosticSeverity.Warning,
-            isEnabledByDefault: true);
-
-        public static readonly DiagnosticDescriptor ArrayMoreThanFourDimensionsDescriptor = new DiagnosticDescriptor(
-            RoslynDiagnosticIds.NetNativeArrayMoreThanFourDimensionsRuleId,
-            s_localizableArrayMoreThanFourDimensionsMessageAndTitle,
-            s_localizableArrayMoreThanFourDimensionsMessageAndTitle,
-            "Reliability",
-            DiagnosticSeverity.Warning,
-            isEnabledByDefault: true);
-
-        public static readonly DiagnosticDescriptor IEquatableEqualsDescriptor = new DiagnosticDescriptor(
-            RoslynDiagnosticIds.NetNativeIEquatableEqualsRuleId,
-            s_localizableIEquatableEqualsMessageAndTitle,
-            s_localizableIEquatableEqualsMessageAndTitle,
-            "Reliability",
-            DiagnosticSeverity.Warning,
-            isEnabledByDefault: true);
-
+    {                
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics
         {
             get
             {
-                return ImmutableArray.Create(ArrayPointerElementDescriptor, ArrayMoreThanFourDimensionsDescriptor, IEquatableEqualsDescriptor);
+                return ImmutableArray.Create(
+                    ArrayPointerElementDescriptor,
+                    ArrayMoreThanFourDimensionsDescriptor,
+                    IEquatableEqualsDescriptor,
+                    ClassInterfaceAttributeValueDescriptor);
             }
         }
 
         public override void Initialize(AnalysisContext context)
         {
-            context.RegisterSymbolAction(
-                (symbolContext) =>
-                {
-                    AnalyzeMethod(symbolContext, (IMethodSymbol)symbolContext.Symbol);
-                },
-                SymbolKind.Method);
-
-            context.RegisterSymbolAction(
-                (symbolContext) =>
-                {
-                    AnalyzeProperty(symbolContext, (IPropertySymbol)symbolContext.Symbol);
-                },
-                SymbolKind.Property);
-
-            context.RegisterSymbolAction(
-                (symbolContext) =>
-                {
-                    AnalyzeField(symbolContext, (IFieldSymbol)symbolContext.Symbol);
-                },
-                SymbolKind.Field);
-
             context.RegisterSyntaxNodeAction(
                 (nodeContext) =>
                 {
-                    AnalyzeArrayCreation(nodeContext, (ArrayCreationExpressionSyntax)nodeContext.Node);
+                    AnalyzeArrayTypeSyntax(nodeContext, (ArrayTypeSyntax)nodeContext.Node);
                 },
-                SyntaxKind.ArrayCreationExpression);
+                SyntaxKind.ArrayType);
 
-            context.RegisterSyntaxNodeAction(
-                (nodeContext) =>
-                {
-                    AnalyzeArrayElementReference(nodeContext, (ElementAccessExpressionSyntax)nodeContext.Node);
-                },
-                SyntaxKind.ElementAccessExpression);
-
-            context.RegisterSyntaxNodeAction(
-                (nodeContext) =>
-                {
-                    AnalyzeLocalDeclaration(nodeContext, (LocalDeclarationStatementSyntax)nodeContext.Node);
-                },
-                SyntaxKind.LocalDeclarationStatement);
-
-            context.RegisterSyntaxNodeAction(
-                (nodeContext) =>
-                {
-                    AnalyzeTypeArguments(nodeContext, (TypeArgumentListSyntax)nodeContext.Node);
-                },
-                SyntaxKind.TypeArgumentList);
-
-            context.RegisterSyntaxNodeAction(
-              (nodeContext) =>
-              {
-                  AnalyzeArrayTypeSyntax(nodeContext, (ArrayTypeSyntax)nodeContext.Node);
-              },
-              SyntaxKind.ArrayType);
-
-            context.RegisterCompilationStartAction(OnCompilationStart);
+            context.RegisterCompilationStartAction(IEquatableAndEquals);
+            context.RegisterCompilationStartAction(ClassInterfaceAttribute);
         }
 
-        private void OnCompilationStart(CompilationStartAnalysisContext context)
+        private void AnalyzeArrayTypeSyntax(SyntaxNodeAnalysisContext context, ArrayTypeSyntax arrayTypeSyntax)
         {
+            // Detect array types with more than four dimensions.
+            foreach (ArrayRankSpecifierSyntax rankSpecifier in arrayTypeSyntax.RankSpecifiers)
+            {
+                if (rankSpecifier.Rank > 4)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(ArrayMoreThanFourDimensionsDescriptor, rankSpecifier.GetLocation()));
+                }
+            }
+
+            // Detect array types with pointer element types.
+            ITypeSymbol elementType = context.SemanticModel.GetTypeInfo(arrayTypeSyntax.ElementType).Type;
+            if (elementType.TypeKind == TypeKind.Pointer)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(ArrayPointerElementDescriptor, arrayTypeSyntax.GetLocation()));
+            }
+        }
+
+        private void IEquatableAndEquals(CompilationStartAnalysisContext context)
+        {
+            // Find System.Object, System.Object.Equals(object), and System.IEquatable<T>.
+            // Register an action for the IEquatable/Equals rule only if all are present.
             INamedTypeSymbol systemObject = context.Compilation.GetTypeByMetadataName("System.Object");
             if (systemObject != null)
             {
@@ -136,31 +84,6 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                 }
             }
         }
-
-#if false
-        private void AnalyzeCall(SyntaxNodeAnalysisContext context, ISymbol immutableArrayType)
-        {
-            var invokeSyntax = context.Node as InvocationExpressionSyntax;
-            if (invokeSyntax == null)
-            {
-                return;
-            }
-
-            var memberSyntax = invokeSyntax.Expression as MemberAccessExpressionSyntax;
-            if (memberSyntax == null ||
-                memberSyntax.Name == null ||
-                memberSyntax.Name.Identifier.ValueText != "ToImmutableArray")
-            {
-                return;
-            }
-
-            var targetType = context.SemanticModel.GetTypeInfo(memberSyntax.Expression, context.CancellationToken);
-            if (targetType.Type != null && targetType.Type.OriginalDefinition.Equals(immutableArrayType))
-            {
-                context.ReportDiagnostic(Diagnostic.Create(DoNotCallToImmutableArrayDescriptor, context.Node.GetLocation()));
-            }
-        }
-#endif
 
         private void AnalyzeTypeForIEquatable(SymbolAnalysisContext context, INamedTypeSymbol namedType, INamedTypeSymbol iEquatable, IMethodSymbol objectEquals)
         {
@@ -191,68 +114,116 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
-        private void AnalyzeField(SymbolAnalysisContext context, IFieldSymbol field)
+        private void ClassInterfaceAttribute(CompilationStartAnalysisContext context)
         {
-           
-        }
+            // Find System.Runtime.InteropServices.ClassInterfaceAttribute..ctor(ClassInterfaceType),
+            // System.Runtime.InteropServices.ClassInterfaceType.AutoDispatch and System.Runtime.InteropServices.ClassInterfaceType.AutoDual.
+            // Register an action for the rule only if all are present.
 
-        private void AnalyzeMethod(SymbolAnalysisContext context, IMethodSymbol method)
-        {
-            if (method.MethodKind != MethodKind.PropertyGet && method.MethodKind != MethodKind.PropertySet)
+            INamedTypeSymbol classInterfaceType = context.Compilation.GetTypeByMetadataName("System.Runtime.InteropServices.ClassInterfaceType");
+            if (classInterfaceType != null)
             {
-                foreach (IParameterSymbol parameter in method.Parameters)
+                IFieldSymbol autoDispatch = null;
+                IFieldSymbol autoDual = null;
+
+                foreach (ISymbol classInterfaceTypeMember in classInterfaceType.GetMembers())
                 {
+                    if (classInterfaceTypeMember.Kind == SymbolKind.Field)
+                    {
+                        IFieldSymbol classInterfaceTypeField = (IFieldSymbol)classInterfaceTypeMember;
+                        if (classInterfaceTypeField.HasConstantValue && classInterfaceTypeField.Type.Equals(classInterfaceType))
+                        {
+                            switch (classInterfaceTypeField.Name)
+                            {
+                                case "AutoDispatch":
+                                    autoDispatch = classInterfaceTypeField;
+                                    break;
+                                case "AutoDual":
+                                    autoDual = classInterfaceTypeField;
+                                    break;
+                            }
+                        }
+                    }
+                }
+
+                INamedTypeSymbol classInterfaceAttribute = context.Compilation.GetTypeByMetadataName("System.Runtime.InteropServices.ClassInterfaceAttribute");
+                if (classInterfaceAttribute != null)
+                {
+                    IMethodSymbol classInterfaceAttributeConstructor = null;
+                    foreach (IMethodSymbol constructor in classInterfaceAttribute.Constructors)
+                    {
+                        if (constructor.Parameters.Length == 1 && constructor.Parameters[0].Type.Equals(classInterfaceType))
+                        {
+                            classInterfaceAttributeConstructor = constructor;
+                            break;
+                        }
+                    }
+
+                    if (autoDispatch != null && autoDual != null && classInterfaceAttributeConstructor != null)
+                    {
+                        context.RegisterSymbolAction(symbolContext => AnalyzeForClassInterfaceAttribute(symbolContext, (INamedTypeSymbol)symbolContext.Symbol, classInterfaceAttributeConstructor, autoDispatch, autoDual), SymbolKind.NamedType);
+                    }
                 }
             }
         }
 
-        private void AnalyzeProperty(SymbolAnalysisContext context, IPropertySymbol property)
+        private void AnalyzeForClassInterfaceAttribute(SymbolAnalysisContext context, INamedTypeSymbol namedType, IMethodSymbol classInterfaceAttributeConstructor, IFieldSymbol autoDispatch, IFieldSymbol autoDual)
         {
-        }
-
-        private void AnalyzeArrayCreation(SyntaxNodeAnalysisContext context, ArrayCreationExpressionSyntax arrayCreation)
-        {
-          
-        }
-
-        private void AnalyzeArrayElementReference(SyntaxNodeAnalysisContext context, ElementAccessExpressionSyntax elementAccess)
-        {
-           
-        }
-
-        private void AnalyzeLocalDeclaration(SyntaxNodeAnalysisContext context, LocalDeclarationStatementSyntax declaration)
-        {
-            foreach (VariableDeclaratorSyntax declarator in declaration.Declaration.Variables)
+            if (namedType.TypeKind == TypeKind.Class)
             {
-                ILocalSymbol local = (ILocalSymbol)context.SemanticModel.GetDeclaredSymbol(declarator);
-            
-            }
-        }
-
-        private void AnalyzeTypeArguments(SyntaxNodeAnalysisContext context, TypeArgumentListSyntax argumentList)
-        {
-            foreach (TypeSyntax typeSyntax in argumentList.Arguments)
-            {
-                ITypeSymbol type = context.SemanticModel.GetTypeInfo(typeSyntax).Type;
-               
-            }
-        }
-
-        private void AnalyzeArrayTypeSyntax(SyntaxNodeAnalysisContext context, ArrayTypeSyntax arrayTypeSyntax)
-        {
-            foreach (ArrayRankSpecifierSyntax rankSpecifier in arrayTypeSyntax.RankSpecifiers)
-            {
-                if (rankSpecifier.Rank > 4)
+                foreach (AttributeData attribute in namedType.GetAttributes())
                 {
-                    context.ReportDiagnostic(Diagnostic.Create(ArrayMoreThanFourDimensionsDescriptor, rankSpecifier.GetLocation()));
+                    if (attribute.AttributeConstructor.Equals(classInterfaceAttributeConstructor) && attribute.ConstructorArguments.Length == 1)
+                    {
+                        TypedConstant argument = attribute.ConstructorArguments[0];
+                        if (argument.Kind == TypedConstantKind.Enum)
+                        {
+                            object value = argument.Value;
+                            if (value.Equals(autoDispatch.ConstantValue) || value.Equals(autoDual.ConstantValue))
+                            {
+                                // Constructor argument is not ClassInterfaceType.None.
+                                context.ReportDiagnostic(Diagnostic.Create(ClassInterfaceAttributeValueDescriptor, attribute.ApplicationSyntaxReference.GetSyntax().GetLocation()));
+                            }
+                        }
+                    }
                 }
             }
-
-            ITypeSymbol elementType = context.SemanticModel.GetTypeInfo(arrayTypeSyntax.ElementType).Type;
-            if (elementType.TypeKind == TypeKind.Pointer)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(ArrayPointerElementDescriptor, arrayTypeSyntax.GetLocation()));
-            }
         }
+
+        private static readonly LocalizableString s_localizableArrayPointerElementMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeArrayPointerElementMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor ArrayPointerElementDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeArrayPointerElementRuleId,
+            s_localizableArrayPointerElementMessageAndTitle,
+            s_localizableArrayPointerElementMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableArrayMoreThanFourDimensionsMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeArrayMoreThanFourDimensionsMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor ArrayMoreThanFourDimensionsDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeArrayMoreThanFourDimensionsRuleId,
+            s_localizableArrayMoreThanFourDimensionsMessageAndTitle,
+            s_localizableArrayMoreThanFourDimensionsMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableIEquatableEqualsMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeIEquatableEqualsMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor IEquatableEqualsDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeIEquatableEqualsRuleId,
+            s_localizableIEquatableEqualsMessageAndTitle,
+            s_localizableIEquatableEqualsMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableClassInterfaceAttributeValueMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeClassInterfaceAttributeValueMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor ClassInterfaceAttributeValueDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeClassInterfaceAttributeValueRuleId,
+            s_localizableClassInterfaceAttributeValueMessageAndTitle,
+            s_localizableClassInterfaceAttributeValueMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
     }
 }

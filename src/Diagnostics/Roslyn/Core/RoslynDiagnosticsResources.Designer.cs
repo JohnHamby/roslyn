@@ -322,6 +322,15 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native allows only ClassInterfaceType.None as an argument to the constructor of ClassInterfaceAttribute..
+        /// </summary>
+        internal static string NetNativeClassInterfaceAttributeValueMessage {
+            get {
+                return ResourceManager.GetString("NetNativeClassInterfaceAttributeValueMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to .Net Native requires that a class that implements System.IEquatable&lt;T&gt; must also override Object.Equals(object)..
         /// </summary>
         internal static string NetNativeIEquatableEqualsMessage {

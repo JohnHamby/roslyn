@@ -132,5 +132,34 @@ class FailsToOverride : System.IEquatable<FailsToOverride>
                 code,
                 GetCSharpResultAt(11, 7, NativeGatekeeperAnalyzer.IEquatableEqualsDescriptor));
         }
+
+        [Fact]
+        public void ClassInterfaceAttributeValue()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
+
+[ClassInterface(ClassInterfaceType.None)]
+class OK
+{
+}
+
+[ClassInterface(ClassInterfaceType.AutoDispatch)]
+class Bad1
+{
+}
+
+[ClassInterface(ClassInterfaceType.AutoDual)]
+class Bad2
+{
+}
+";
+
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(11, 7, NativeGatekeeperAnalyzer.IEquatableEqualsDescriptor));
+        }
     }
 }
