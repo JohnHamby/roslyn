@@ -195,11 +195,13 @@ class OK
 
 class Test
 {
-    public void TestMethod(OK p1, TypeInfo p2)
+    public void TestMethod(OK p1, TypeInfo p2, System.Type p3)
     {
         var x = p1.GUID;
         var y = p2.GUID;
         y = p2?.GUID;
+        // Apparently references to GUID through System.Type are OK.
+        y = p3.GUID;
         var z = p2.BaseType;
     }
 }

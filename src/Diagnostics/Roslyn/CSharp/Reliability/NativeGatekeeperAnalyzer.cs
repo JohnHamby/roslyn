@@ -231,27 +231,35 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                 {
                     if (guidMember.Kind == SymbolKind.Property)
                     {
-                        context.RegisterSyntaxNodeAction(nodeContext => AnalyzeForTypeInfoGUID(nodeContext, (IPropertySymbol)guidMember), SyntaxKind.SimpleMemberAccessExpression, SyntaxKind.ConditionalAccessExpression);
+                        context.RegisterSyntaxNodeAction(nodeContext => AnalyzeForTypeInfoGUID(nodeContext, typeInfo, (IPropertySymbol)guidMember), SyntaxKind.SimpleMemberAccessExpression, SyntaxKind.ConditionalAccessExpression);
                         return;
                     }
                 }
             }
         }
 
-        private void AnalyzeForTypeInfoGUID(SyntaxNodeAnalysisContext context, IPropertySymbol guid)
+        private void AnalyzeForTypeInfoGUID(SyntaxNodeAnalysisContext context, INamedTypeSymbol typeInfo, IPropertySymbol guid)
         {
             SimpleNameSyntax memberName = null;
+            ExpressionSyntax baseReference = null;
             switch (context.Node.Kind())
             {
                 case SyntaxKind.SimpleMemberAccessExpression:
-                    memberName = ((MemberAccessExpressionSyntax)context.Node).Name;
+                    {
+                        MemberAccessExpressionSyntax memberAccess = (MemberAccessExpressionSyntax)context.Node;
+                        memberName = memberAccess.Name;
+                        baseReference = memberAccess.Expression;
+                    }
+
                     break;
                 case SyntaxKind.ConditionalAccessExpression:
                     {
-                        ExpressionSyntax memberExpression = ((ConditionalAccessExpressionSyntax)context.Node).WhenNotNull;
+                        ConditionalAccessExpressionSyntax conditionalAccess = (ConditionalAccessExpressionSyntax)context.Node;
+                        ExpressionSyntax memberExpression = conditionalAccess.WhenNotNull;
                         if (memberExpression.Kind() == SyntaxKind.MemberBindingExpression)
                         {
                             memberName = ((MemberBindingExpressionSyntax)memberExpression).Name;
+                            baseReference = conditionalAccess.Expression;
                         }
                     }
 
@@ -260,10 +268,15 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             
             if (memberName != null && memberName.Identifier.Text == "GUID")
             {
-                ISymbol referencedSymbol = context.SemanticModel.GetSymbolInfo(memberName).Symbol;
-                if (referencedSymbol != null && referencedSymbol.Equals(guid))
+                // Check only references that go through TypeInfo, not those that go directly through Type.
+                ITypeSymbol baseReferenceType = context.SemanticModel.GetTypeInfo(baseReference).Type;
+                if (baseReferenceType != null && typeInfo.Equals(baseReferenceType))
                 {
-                    context.ReportDiagnostic(Diagnostic.Create(TypeInfoGUIDDescriptor, memberName.GetLocation()));
+                    ISymbol referencedSymbol = context.SemanticModel.GetSymbolInfo(memberName).Symbol;
+                    if (referencedSymbol != null && referencedSymbol.Equals(guid))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(TypeInfoGUIDDescriptor, memberName.GetLocation()));
+                    }
                 }
             }
         }
