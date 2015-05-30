@@ -149,37 +149,44 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                 INamedTypeSymbol classInterfaceAttribute = context.Compilation.GetTypeByMetadataName("System.Runtime.InteropServices.ClassInterfaceAttribute");
                 if (classInterfaceAttribute != null)
                 {
-                    IMethodSymbol classInterfaceAttributeConstructor = null;
+                    IMethodSymbol classInterfaceAttributeConstructor1 = null;
+                    IMethodSymbol classInterfaceAttributeConstructor2 = null;
                     foreach (IMethodSymbol constructor in classInterfaceAttribute.Constructors)
                     {
-                        if (constructor.Parameters.Length == 1 && constructor.Parameters[0].Type.Equals(classInterfaceType))
+                        if (constructor.Parameters.Length == 1)
                         {
-                            classInterfaceAttributeConstructor = constructor;
-                            break;
+                            if (constructor.Parameters[0].Type.Equals(classInterfaceType))
+                            {
+                                classInterfaceAttributeConstructor1 = constructor;
+                            }
+                            else if (constructor.Parameters[0].Type.SpecialType == SpecialType.System_Int16)
+                            {
+                                classInterfaceAttributeConstructor2 = constructor;
+                            }
                         }
                     }
 
-                    if (autoDispatch != null && autoDual != null && classInterfaceAttributeConstructor != null)
+                    if (autoDispatch != null && autoDual != null && classInterfaceAttributeConstructor1 != null && classInterfaceAttributeConstructor2 != null)
                     {
-                        context.RegisterSymbolAction(symbolContext => AnalyzeForClassInterfaceAttribute(symbolContext, (INamedTypeSymbol)symbolContext.Symbol, classInterfaceAttributeConstructor, autoDispatch, autoDual), SymbolKind.NamedType);
+                        context.RegisterSymbolAction(symbolContext => AnalyzeForClassInterfaceAttribute(symbolContext, (INamedTypeSymbol)symbolContext.Symbol, classInterfaceAttributeConstructor1, classInterfaceAttributeConstructor2, (int)autoDispatch.ConstantValue, (int)autoDual.ConstantValue), SymbolKind.NamedType);
                     }
                 }
             }
         }
 
-        private void AnalyzeForClassInterfaceAttribute(SymbolAnalysisContext context, INamedTypeSymbol namedType, IMethodSymbol classInterfaceAttributeConstructor, IFieldSymbol autoDispatch, IFieldSymbol autoDual)
+        private void AnalyzeForClassInterfaceAttribute(SymbolAnalysisContext context, INamedTypeSymbol namedType, IMethodSymbol classInterfaceAttributeConstructor1, IMethodSymbol classInterfaceAttributeConstructor2, int autoDispatch, int autoDual)
         {
             if (namedType.TypeKind == TypeKind.Class)
             {
                 foreach (AttributeData attribute in namedType.GetAttributes())
                 {
-                    if (attribute.AttributeConstructor.Equals(classInterfaceAttributeConstructor) && attribute.ConstructorArguments.Length == 1)
+                    if (attribute.AttributeConstructor != null && (attribute.AttributeConstructor.Equals(classInterfaceAttributeConstructor1) || attribute.AttributeConstructor.Equals(classInterfaceAttributeConstructor2)) && attribute.ConstructorArguments.Length == 1)
                     {
                         TypedConstant argument = attribute.ConstructorArguments[0];
-                        if (argument.Kind == TypedConstantKind.Enum)
+                        if (argument.Kind == TypedConstantKind.Enum || argument.Kind == TypedConstantKind.Primitive)
                         {
-                            object value = argument.Value;
-                            if (value.Equals(autoDispatch.ConstantValue) || value.Equals(autoDual.ConstantValue))
+                            int value = argument.Value is short ? (short)argument.Value : (int)argument.Value;
+                            if (value == autoDispatch || value == autoDual)
                             {
                                 // Constructor argument is not ClassInterfaceType.None.
                                 context.ReportDiagnostic(Diagnostic.Create(ClassInterfaceAttributeValueDescriptor, attribute.ApplicationSyntaxReference.GetSyntax().GetLocation()));

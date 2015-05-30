@@ -142,7 +142,12 @@ using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 
 [ClassInterface(ClassInterfaceType.None)]
-class OK
+class OK1
+{
+}
+
+[ClassInterface((short)ClassInterfaceType.None)]
+class OK11
 {
 }
 
@@ -155,11 +160,23 @@ class Bad1
 class Bad2
 {
 }
-";
 
+[ClassInterface((short)ClassInterfaceType.AutoDispatch)]
+class Bad11
+{
+}
+
+[ClassInterface((short)ClassInterfaceType.AutoDual)]
+class Bad21
+{
+}
+";
             VerifyCSharp(
                 code,
-                GetCSharpResultAt(11, 7, NativeGatekeeperAnalyzer.IEquatableEqualsDescriptor));
+                GetCSharpResultAt(16, 2, NativeGatekeeperAnalyzer.ClassInterfaceAttributeValueDescriptor),
+                GetCSharpResultAt(21, 2, NativeGatekeeperAnalyzer.ClassInterfaceAttributeValueDescriptor),
+                GetCSharpResultAt(26, 2, NativeGatekeeperAnalyzer.ClassInterfaceAttributeValueDescriptor),
+                GetCSharpResultAt(31, 2, NativeGatekeeperAnalyzer.ClassInterfaceAttributeValueDescriptor));
         }
     }
 }
