@@ -289,5 +289,75 @@ class Test
                 GetCSharpResultAt(26, 20, NativeGatekeeperAnalyzer.BeginEndInvokeDescriptor),
                 GetCSharpResultAt(27, 12, NativeGatekeeperAnalyzer.BeginEndInvokeDescriptor));
         }
+
+        [Fact]
+        public void MultipleDefaultInterfaces()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using Windows.Foundation.Metadata;
+
+namespace Windows.Foundation.Metadata
+{
+    public class DefaultAttribute : System.Attribute
+    {
+    }
+}
+
+[Default]
+public interface I1
+{
+}
+
+[Default]
+public interface I2
+{
+}
+
+public interface I3 : I2
+{
+}
+
+public interface I4
+{
+}
+
+[Default]
+public interface I5: I1
+{
+}
+
+class OK : I1, I4
+{
+}
+
+class Multiple1 : I1, I2
+{
+}
+
+class Multiple2 : I1, I3
+{
+}
+
+class Sneaky: I5
+{
+}
+
+class BaseLevel : I1
+{
+}
+
+class MultiLevel : BaseLevel, I2
+{
+}
+";
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(40, 7, NativeGatekeeperAnalyzer.MultipleDefaultInterfacesDescriptor),
+                GetCSharpResultAt(44, 7, NativeGatekeeperAnalyzer.MultipleDefaultInterfacesDescriptor),
+                GetCSharpResultAt(48, 7, NativeGatekeeperAnalyzer.MultipleDefaultInterfacesDescriptor),
+                GetCSharpResultAt(56, 7, NativeGatekeeperAnalyzer.MultipleDefaultInterfacesDescriptor));
+        }
     }
 }

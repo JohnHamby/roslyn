@@ -17,7 +17,7 @@
 // * m) Referring to one of a set of disallowed methods is prohibited. (There are a few dozen unsupported methods specified in GatekeeperConfig.xml.)
 // * n) Referring to one of a set of disallowed types is prohibited. (There are 14 unsupported types specified in GatekeeperConfig.xml)
 // * o) A value type must not exceed 1,000,000 bytes in instance size.
-// * p) A class cannot implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute.
+// A class cannot implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute.
 // * q) A public member of a type defined in a WinMD cannot refer to the types System.IntPtr or System.UIntPtr in a method signature, method return type, or property type. (Gatekeeper also appears to be attempting to prohibit using these types as generic type arguments to public types, but the code looks buggy and I’m not 100% sure of the intent.I have a question out to a Project N developer.)
 
 
@@ -44,7 +44,8 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     TypeInfoGUIDDescriptor,
                     TypeGetRuntimeMethodsDescriptor,
                     TypeGetTypeDescriptor,
-                    BeginEndInvokeDescriptor);
+                    BeginEndInvokeDescriptor,
+                    MultipleDefaultInterfacesDescriptor);
             }
         }
 
@@ -67,6 +68,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                        AnalyzeForDelegateMethods(nodeContext, (MemberAccessExpressionSyntax)nodeContext.Node);
                    },
                 SyntaxKind.SimpleMemberAccessExpression);
+            context.RegisterCompilationStartAction(InterfaceDefaultAttribute);
         }
 
         // An array type cannot have a pointer type as an element type.
@@ -350,6 +352,43 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
+        private void InterfaceDefaultAttribute(CompilationStartAnalysisContext context)
+        {
+            // Find Windows.Foundation.Metadata.DefaultAttribute, and register an action if present.
+
+            INamedTypeSymbol defaultAttribute = context.Compilation.GetTypeByMetadataName("Windows.Foundation.Metadata.DefaultAttribute");
+            if (defaultAttribute != null)
+            {
+                context.RegisterSymbolAction((symbolContext) => AnalyzeForMultipleDefaultInterfaces(symbolContext, (INamedTypeSymbol)symbolContext.Symbol, defaultAttribute), SymbolKind.NamedType);
+            }
+        }
+
+        // A class cannot implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute.
+        void AnalyzeForMultipleDefaultInterfaces(SymbolAnalysisContext context, INamedTypeSymbol type, INamedTypeSymbol defaultAttribute)
+        {
+            if (type.TypeKind == TypeKind.Class)
+            {
+                int defaultInterfaceCount = 0;
+
+                foreach (INamedTypeSymbol implemented in type.AllInterfaces)
+                {
+                    foreach (AttributeData attribute in implemented.GetAttributes())
+                    {
+                        if (attribute.AttributeClass.Equals(defaultAttribute))
+                        {
+                            defaultInterfaceCount++;
+
+                            if (defaultInterfaceCount > 1)
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(MultipleDefaultInterfacesDescriptor, type.Locations[0]));
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         private void CheckForMember(SyntaxNodeAnalysisContext context, SimpleNameSyntax memberName, ISymbol member, DiagnosticDescriptor diagnostic)
         {
             if (memberName != null && memberName.Identifier.Text == member.Name)
@@ -488,6 +527,15 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             RoslynDiagnosticIds.NetNativeBeginEndInvokeRuleId,
             s_localizableBeginEndInvokeMessageAndTitle,
             s_localizableBeginEndInvokeMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableMultipleDefaultInterfacesMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeMultipleDefaultInterfacesMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor MultipleDefaultInterfacesDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeMultipleDefaultInterfacesRuleId,
+            s_localizableMultipleDefaultInterfacesMessageAndTitle,
+            s_localizableMultipleDefaultInterfacesMessageAndTitle,
             "Reliability",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);

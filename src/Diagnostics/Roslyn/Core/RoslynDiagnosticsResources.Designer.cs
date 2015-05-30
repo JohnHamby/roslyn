@@ -349,6 +349,15 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native does not support classes that implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute..
+        /// </summary>
+        internal static string NetNativeMultipleDefaultInterfacesMessage {
+            get {
+                return ResourceManager.GetString("NetNativeMultipleDefaultInterfacesMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to .Net Native&apos;s implementation of System.Type.GetRuntimeMethods() does not return hidden methods in base types..
         /// </summary>
         internal static string NetNativeTypeGetRuntimeMethodsMessage {
