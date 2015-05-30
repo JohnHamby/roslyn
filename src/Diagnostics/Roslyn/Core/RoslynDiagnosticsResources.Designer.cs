@@ -340,6 +340,24 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native&apos;s implementation of System.Type.GetRuntimeMethods() does not return hidden methods in base types..
+        /// </summary>
+        internal static string NetNativeTypeGetRuntimeMethodsMessage {
+            get {
+                return ResourceManager.GetString("NetNativeTypeGetRuntimeMethodsMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to .Net Native&apos;s implementation of System.Type.GetType(string) searches the System.Runtime assembly only. Use Assembly.GetType(string) to search another assembly..
+        /// </summary>
+        internal static string NetNativeTypeGetTypeMessage {
+            get {
+                return ResourceManager.GetString("NetNativeTypeGetTypeMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to .Net Native&apos;s implementation of System.Reflection.TypeInfo.GUID throws PlatformNotSupportedException if the type does not have a System.Runtime.InteropServices.GuidAttribute attribute..
         /// </summary>
         internal static string NetNativeTypeInfoGUIDMessage {

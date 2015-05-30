@@ -211,5 +211,39 @@ class Test
                 GetCSharpResultAt(17, 20, NativeGatekeeperAnalyzer.TypeInfoGUIDDescriptor),
                 GetCSharpResultAt(18, 17, NativeGatekeeperAnalyzer.TypeInfoGUIDDescriptor));
         }
+
+        [Fact]
+        public void TypeMembers()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Reflection;
+using System.Reflection.RuntimeReflectionExtensions;
+using System.Runtime.InteropServices;
+
+class OK
+{
+    public int GetType(string s) { get { return 0; } }
+    public int GetRuntimeMethods() { get { return 0; } }
+}
+
+class Test
+{
+    public void TestMethod(OK p1, System.Type p2, string s)
+    {
+        var x = p1.GetType(s);
+        x = p1.GetRuntimeMethods();
+        var y = p2.GetType(s);
+        var z = p2.GetRuntimeMethods();
+        var mumble = p2.GetEvents();
+    }
+}
+";
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(20, 20, NativeGatekeeperAnalyzer.TypeGetTypeDescriptor),
+                GetCSharpResultAt(21, 20, NativeGatekeeperAnalyzer.TypeGetRuntimeMethodsDescriptor));
+        }
     }
 }

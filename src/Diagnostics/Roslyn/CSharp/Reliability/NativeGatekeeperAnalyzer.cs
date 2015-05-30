@@ -5,8 +5,8 @@
 // a) An array type cannot have a pointer type as an element type.
 // b) A type that implements IEquatable<T> must override Object.Equals().
 // * c) Creation of a System.Diagnostics.Tracing.EventSourceAttribute instance cannot specify a value for the LocalizationResources property.
-// * d) Type.GetRuntimeMethods() does not return hidden methods in base types. (This seems like an informational message only.)
-// * e) Type.GetType(string) searches System.Runtime only.Use Assembly.GetType(string) to search another assembly.
+// d) Type.GetRuntimeMethods() does not return hidden methods in base types. (This seems like an informational message only.)
+// e) Type.GetType(string) searches System.Runtime only.Use Assembly.GetType(string) to search another assembly.
 // * f) The body of an infinite loop must do more than store constant values to locals.
 // g) An array type cannot have more than 4 dimensions.
 // h) The TypeInfo.GUID property will throw PlatformNotSupportedException if the type does not have a Guid attribute applied to it.
@@ -41,7 +41,9 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     ArrayMoreThanFourDimensionsDescriptor,
                     IEquatableEqualsDescriptor,
                     ClassInterfaceAttributeValueDescriptor,
-                    TypeInfoGUIDDescriptor);
+                    TypeInfoGUIDDescriptor,
+                    TypeGetRuntimeMethodsDescriptor,
+                    TypeGetTypeDescriptor);
             }
         }
 
@@ -57,6 +59,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             context.RegisterCompilationStartAction(IEquatableAndEquals);
             context.RegisterCompilationStartAction(ClassInterfaceAttribute);
             context.RegisterCompilationStartAction(TypeInfoGUID);
+            context.RegisterCompilationStartAction(TypeMethods);
         }
 
         private void AnalyzeArrayTypeSyntax(SyntaxNodeAnalysisContext context, ArrayTypeSyntax arrayTypeSyntax)
@@ -242,43 +245,132 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
         {
             SimpleNameSyntax memberName = null;
             ExpressionSyntax baseReference = null;
-            switch (context.Node.Kind())
-            {
-                case SyntaxKind.SimpleMemberAccessExpression:
-                    {
-                        MemberAccessExpressionSyntax memberAccess = (MemberAccessExpressionSyntax)context.Node;
-                        memberName = memberAccess.Name;
-                        baseReference = memberAccess.Expression;
-                    }
 
-                    break;
-                case SyntaxKind.ConditionalAccessExpression:
-                    {
-                        ConditionalAccessExpressionSyntax conditionalAccess = (ConditionalAccessExpressionSyntax)context.Node;
-                        ExpressionSyntax memberExpression = conditionalAccess.WhenNotNull;
-                        if (memberExpression.Kind() == SyntaxKind.MemberBindingExpression)
-                        {
-                            memberName = ((MemberBindingExpressionSyntax)memberExpression).Name;
-                            baseReference = conditionalAccess.Expression;
-                        }
-                    }
-
-                    break;
-            }
-            
-            if (memberName != null && memberName.Identifier.Text == "GUID")
+            if (TryGetMemberReferenceInfo((ExpressionSyntax)context.Node, out baseReference, out memberName))
             {
                 // Check only references that go through TypeInfo, not those that go directly through Type.
                 ITypeSymbol baseReferenceType = context.SemanticModel.GetTypeInfo(baseReference).Type;
                 if (baseReferenceType != null && typeInfo.Equals(baseReferenceType))
                 {
-                    ISymbol referencedSymbol = context.SemanticModel.GetSymbolInfo(memberName).Symbol;
-                    if (referencedSymbol != null && referencedSymbol.Equals(guid))
+                    CheckForMember(context, memberName, guid, TypeInfoGUIDDescriptor);
+                }
+            }
+        }
+
+        private void TypeMethods(CompilationStartAnalysisContext context)
+        {
+            // Find System.Type.GetType(string) and System.Reflection.RuntimeReflectionExtensions.GetRuntimeMethods(System.Type), and register an action if they are both present.
+
+            INamedTypeSymbol type = context.Compilation.GetTypeByMetadataName("System.Type");
+            if (type != null)
+            {
+                IMethodSymbol getRuntimeMethods = null;
+                IMethodSymbol getType = null;
+                
+                foreach (ISymbol getTypeMember in type.GetMembers("GetType"))
+                {
+                    if (getTypeMember.Kind == SymbolKind.Method)
                     {
-                        context.ReportDiagnostic(Diagnostic.Create(TypeInfoGUIDDescriptor, memberName.GetLocation()));
+                        IMethodSymbol method = (IMethodSymbol)getTypeMember;
+                        if (method.Parameters.Length == 1 && method.Parameters[0].Type.SpecialType == SpecialType.System_String)
+                        {
+                            getType = method;
+                            break;
+                        }
+                    }
+                }
+
+                INamedTypeSymbol runtimeExtensions = context.Compilation.GetTypeByMetadataName("System.Reflection.RuntimeReflectionExtensions");
+                if (runtimeExtensions != null)
+                {
+                    foreach (ISymbol getRuntimeMethodsMember in runtimeExtensions.GetMembers("GetRuntimeMethods"))
+                    {
+                        if (getRuntimeMethodsMember.Kind == SymbolKind.Method)
+                        {
+                            IMethodSymbol method = (IMethodSymbol)getRuntimeMethodsMember;
+                            if (method.Parameters.Length == 1 && type.Equals(method.Parameters[0].Type))
+                            {
+                                getRuntimeMethods = method;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (getRuntimeMethods != null && getType != null)
+                {
+                    context.RegisterSyntaxNodeAction(nodeContext => AnalyzeForTypeMethods(nodeContext, getRuntimeMethods, getType), SyntaxKind.SimpleMemberAccessExpression, SyntaxKind.ConditionalAccessExpression);
+                }
+            }
+        }
+
+        private void AnalyzeForTypeMethods(SyntaxNodeAnalysisContext context, IMethodSymbol getRuntimeMethods, IMethodSymbol getType)
+        {
+            SimpleNameSyntax memberName = null;
+            ExpressionSyntax baseReference = null;
+
+            if (TryGetMemberReferenceInfo((ExpressionSyntax)context.Node, out baseReference, out memberName))
+            {
+                CheckForMember(context, memberName, getType, TypeGetTypeDescriptor);
+                CheckForMember(context, memberName, getRuntimeMethods, TypeGetRuntimeMethodsDescriptor);
+            }
+        }
+
+        private void CheckForMember(SyntaxNodeAnalysisContext context, SimpleNameSyntax memberName, ISymbol member, DiagnosticDescriptor diagnostic)
+        {
+            if (memberName != null && memberName.Identifier.Text == member.Name)
+            {
+                ISymbol referencedSymbol = context.SemanticModel.GetSymbolInfo(memberName).Symbol;
+                if (referencedSymbol != null)
+                {
+                    if (referencedSymbol.Kind == SymbolKind.Method)
+                    {
+                        IMethodSymbol referencedMethod = (IMethodSymbol)referencedSymbol;
+                        if (referencedMethod.IsExtensionMethod)
+                        {
+                            referencedSymbol = referencedMethod.ReducedFrom ?? referencedSymbol;
+                        }
+                    }
+
+                    if (referencedSymbol.Equals(member))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(diagnostic, memberName.GetLocation()));
                     }
                 }
             }
+        }
+
+        private bool TryGetMemberReferenceInfo(ExpressionSyntax expression, out ExpressionSyntax baseReference, out SimpleNameSyntax memberName)
+        {
+            switch (expression.Kind())
+            {
+                case SyntaxKind.SimpleMemberAccessExpression:
+                    {
+                        MemberAccessExpressionSyntax memberAccess = (MemberAccessExpressionSyntax)expression;
+                        memberName = memberAccess.Name;
+                        baseReference = memberAccess.Expression;
+                    }
+
+                    return true;
+
+                case SyntaxKind.ConditionalAccessExpression:
+                    {
+                        ConditionalAccessExpressionSyntax conditionalAccess = (ConditionalAccessExpressionSyntax)expression;
+                        ExpressionSyntax memberExpression = conditionalAccess.WhenNotNull;
+                        if (memberExpression.Kind() == SyntaxKind.MemberBindingExpression)
+                        {
+                            memberName = ((MemberBindingExpressionSyntax)memberExpression).Name;
+                            baseReference = conditionalAccess.Expression;
+                            return true;
+                        }
+                    }
+
+                    break;
+            }
+
+            baseReference = null;
+            memberName = null;
+            return false;
         }
 
         private System.Collections.Generic.IEnumerable<ISymbol> GetAllMembers(INamedTypeSymbol type, string name)
@@ -336,7 +428,25 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             s_localizableTypeInfoGUIDMessageAndTitle,
             s_localizableTypeInfoGUIDMessageAndTitle,
             "Reliability",
-            DiagnosticSeverity.Warning,
+            DiagnosticSeverity.Info,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableTypeGetRuntimeMethodsMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeTypeGetRuntimeMethodsMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor TypeGetRuntimeMethodsDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeTypeGetRuntimeMethodsRuleId,
+            s_localizableTypeGetRuntimeMethodsMessageAndTitle,
+            s_localizableTypeGetRuntimeMethodsMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Info,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableTypeGetTypeMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeTypeGetTypeMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor TypeGetTypeDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeTypeGetTypeRuleId,
+            s_localizableTypeGetTypeMessageAndTitle,
+            s_localizableTypeGetTypeMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Info,
             isEnabledByDefault: true);
     }
 }

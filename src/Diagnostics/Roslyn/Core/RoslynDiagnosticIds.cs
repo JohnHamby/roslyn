@@ -34,5 +34,7 @@ namespace Roslyn.Diagnostics.Analyzers
         public const string NetNativeIEquatableEqualsRuleId = "RS1002";
         public const string NetNativeClassInterfaceAttributeValueRuleId = "RS1003";
         public const string NetNativeTypeInfoGUIDRuleId = "RS1004";
+        public const string NetNativeTypeGetRuntimeMethodsRuleId = "RS1005";
+        public const string NetNativeTypeGetTypeRuleId = "RS1006";
     }
 }
