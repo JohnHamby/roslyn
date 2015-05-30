@@ -178,5 +178,36 @@ class Bad21
                 GetCSharpResultAt(26, 2, NativeGatekeeperAnalyzer.ClassInterfaceAttributeValueDescriptor),
                 GetCSharpResultAt(31, 2, NativeGatekeeperAnalyzer.ClassInterfaceAttributeValueDescriptor));
         }
+
+        [Fact]
+        public void TypeInfoGUID()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Reflection;
+using System.Runtime.InteropServices;
+
+class OK
+{
+    public int GUID { get { return 0; } }
+}
+
+class Test
+{
+    public void TestMethod(OK p1, TypeInfo p2)
+    {
+        var x = p1.GUID;
+        var y = p2.GUID;
+        y = p2?.GUID;
+        var z = p2.BaseType;
+    }
+}
+";
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(17, 20, NativeGatekeeperAnalyzer.TypeInfoGUIDDescriptor),
+                GetCSharpResultAt(18, 17, NativeGatekeeperAnalyzer.TypeInfoGUIDDescriptor));
+        }
     }
 }

@@ -1,5 +1,26 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+// Implements .Net Native Gatekeeper rules applicable to C# source.
+//
+// a) An array type cannot have a pointer type as an element type.
+// b) A type that implements IEquatable<T> must override Object.Equals().
+// * c) Creation of a System.Diagnostics.Tracing.EventSourceAttribute instance cannot specify a value for the LocalizationResources property.
+// * d) Type.GetRuntimeMethods() does not return hidden methods in base types. (This seems like an informational message only.)
+// * e) Type.GetType(string) searches System.Runtime only.Use Assembly.GetType(string) to search another assembly.
+// * f) The body of an infinite loop must do more than store constant values to locals.
+// g) An array type cannot have more than 4 dimensions.
+// h) The TypeInfo.GUID property will throw PlatformNotSupportedException if the type does not have a Guid attribute applied to it.
+// i) Neither ClassInterfaceType.AutoDispatch nor ClassInterfaceType.GetHashCode can be used in creating a System.Runtime.InteropServices.ClassInterfaceAttribute instance. Only ClassInterfaceType.None is allowed.
+// * j) Referring to either the BeginInvoke method or the EndInvoke method of a delegate type is prohibited.
+// * k) A reference to one of a set of disallowed contract assemblies is prohibited. (The set of unsupported contracts in GatekeeperConfig.xml appears to be empty, so this rule is a placebo at present.)
+// * l) A reference to System.Composition.Convention must be to version 1.0.30 or newer.
+// * m) Referring to one of a set of disallowed methods is prohibited. (There are a few dozen unsupported methods specified in GatekeeperConfig.xml.)
+// * n) Referring to one of a set of disallowed types is prohibited. (There are 14 unsupported types specified in GatekeeperConfig.xml)
+// * o) A value type must not exceed 1,000,000 bytes in instance size.
+// * p) A class cannot implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute.
+// * q) A public member of a type defined in a WinMD cannot refer to the types System.IntPtr or System.UIntPtr in a method signature, method return type, or property type. (Gatekeeper also appears to be attempting to prohibit using these types as generic type arguments to public types, but the code looks buggy and I’m not 100% sure of the intent.I have a question out to a Project N developer.)
+
+
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -19,7 +40,8 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     ArrayPointerElementDescriptor,
                     ArrayMoreThanFourDimensionsDescriptor,
                     IEquatableEqualsDescriptor,
-                    ClassInterfaceAttributeValueDescriptor);
+                    ClassInterfaceAttributeValueDescriptor,
+                    TypeInfoGUIDDescriptor);
             }
         }
 
@@ -34,6 +56,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
 
             context.RegisterCompilationStartAction(IEquatableAndEquals);
             context.RegisterCompilationStartAction(ClassInterfaceAttribute);
+            context.RegisterCompilationStartAction(TypeInfoGUID);
         }
 
         private void AnalyzeArrayTypeSyntax(SyntaxNodeAnalysisContext context, ArrayTypeSyntax arrayTypeSyntax)
@@ -197,6 +220,67 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
+        private void TypeInfoGUID(CompilationStartAnalysisContext context)
+        {
+            // Register an action for the rule only if System.Reflection.TypeInfo.GUID is present.
+
+            INamedTypeSymbol typeInfo = context.Compilation.GetTypeByMetadataName("System.Reflection.TypeInfo");
+            if (typeInfo != null)
+            {
+                foreach (ISymbol guidMember in GetAllMembers(typeInfo, "GUID"))
+                {
+                    if (guidMember.Kind == SymbolKind.Property)
+                    {
+                        context.RegisterSyntaxNodeAction(nodeContext => AnalyzeForTypeInfoGUID(nodeContext, (IPropertySymbol)guidMember), SyntaxKind.SimpleMemberAccessExpression, SyntaxKind.ConditionalAccessExpression);
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void AnalyzeForTypeInfoGUID(SyntaxNodeAnalysisContext context, IPropertySymbol guid)
+        {
+            SimpleNameSyntax memberName = null;
+            switch (context.Node.Kind())
+            {
+                case SyntaxKind.SimpleMemberAccessExpression:
+                    memberName = ((MemberAccessExpressionSyntax)context.Node).Name;
+                    break;
+                case SyntaxKind.ConditionalAccessExpression:
+                    {
+                        ExpressionSyntax memberExpression = ((ConditionalAccessExpressionSyntax)context.Node).WhenNotNull;
+                        if (memberExpression.Kind() == SyntaxKind.MemberBindingExpression)
+                        {
+                            memberName = ((MemberBindingExpressionSyntax)memberExpression).Name;
+                        }
+                    }
+
+                    break;
+            }
+            
+            if (memberName != null && memberName.Identifier.Text == "GUID")
+            {
+                ISymbol referencedSymbol = context.SemanticModel.GetSymbolInfo(memberName).Symbol;
+                if (referencedSymbol != null && referencedSymbol.Equals(guid))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(TypeInfoGUIDDescriptor, memberName.GetLocation()));
+                }
+            }
+        }
+
+        private System.Collections.Generic.IEnumerable<ISymbol> GetAllMembers(INamedTypeSymbol type, string name)
+        {
+            while (type != null)
+            {
+                foreach (var member in type.GetMembers(name))
+                {
+                    yield return member;
+                }
+
+                type = type.BaseType;
+            }
+        }
+
         private static readonly LocalizableString s_localizableArrayPointerElementMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeArrayPointerElementMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
         public static readonly DiagnosticDescriptor ArrayPointerElementDescriptor = new DiagnosticDescriptor(
             RoslynDiagnosticIds.NetNativeArrayPointerElementRuleId,
@@ -229,6 +313,15 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             RoslynDiagnosticIds.NetNativeClassInterfaceAttributeValueRuleId,
             s_localizableClassInterfaceAttributeValueMessageAndTitle,
             s_localizableClassInterfaceAttributeValueMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableTypeInfoGUIDMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeTypeInfoGUIDMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor TypeInfoGUIDDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeTypeInfoGUIDRuleId,
+            s_localizableTypeInfoGUIDMessageAndTitle,
+            s_localizableTypeInfoGUIDMessageAndTitle,
             "Reliability",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);

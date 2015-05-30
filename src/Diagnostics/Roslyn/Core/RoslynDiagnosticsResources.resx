@@ -279,4 +279,7 @@
   <data name="NetNativeIEquatableEqualsMessage" xml:space="preserve">
     <value>.Net Native requires that a class that implements System.IEquatable&lt;T&gt; must also override Object.Equals(object).</value>
   </data>
+  <data name="NetNativeTypeInfoGUIDMessage" xml:space="preserve">
+    <value>.Net Native's implementation of System.Reflection.TypeInfo.GUID throws PlatformNotSupportedException if the type does not have a System.Runtime.InteropServices.GuidAttribute attribute.</value>
+  </data>
 </root>

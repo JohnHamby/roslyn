@@ -340,6 +340,15 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native&apos;s implementation of System.Reflection.TypeInfo.GUID throws PlatformNotSupportedException if the type does not have a System.Runtime.InteropServices.GuidAttribute attribute..
+        /// </summary>
+        internal static string NetNativeTypeInfoGUIDMessage {
+            get {
+                return ResourceManager.GetString("NetNativeTypeInfoGUIDMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Override Object.Equals(object) when implementing IEquatable&lt;T&gt; .
         /// </summary>
         internal static string OverrideObjectEqualsDescription {
