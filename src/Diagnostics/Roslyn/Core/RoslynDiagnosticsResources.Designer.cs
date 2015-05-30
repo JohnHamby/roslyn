@@ -322,6 +322,15 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native does not support invoking the BeginInvoke or EndInvoke methods of delegate types..
+        /// </summary>
+        internal static string NetNativeBeginEndInvokeMessage {
+            get {
+                return ResourceManager.GetString("NetNativeBeginEndInvokeMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to .Net Native allows only ClassInterfaceType.None as an argument to the constructor of ClassInterfaceAttribute..
         /// </summary>
         internal static string NetNativeClassInterfaceAttributeValueMessage {

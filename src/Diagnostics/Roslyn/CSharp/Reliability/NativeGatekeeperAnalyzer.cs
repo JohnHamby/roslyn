@@ -11,7 +11,7 @@
 // g) An array type cannot have more than 4 dimensions.
 // h) The TypeInfo.GUID property will throw PlatformNotSupportedException if the type does not have a Guid attribute applied to it.
 // i) Neither ClassInterfaceType.AutoDispatch nor ClassInterfaceType.GetHashCode can be used in creating a System.Runtime.InteropServices.ClassInterfaceAttribute instance. Only ClassInterfaceType.None is allowed.
-// * j) Referring to either the BeginInvoke method or the EndInvoke method of a delegate type is prohibited.
+// j) Referring to either the BeginInvoke method or the EndInvoke method of a delegate type is prohibited.
 // * k) A reference to one of a set of disallowed contract assemblies is prohibited. (The set of unsupported contracts in GatekeeperConfig.xml appears to be empty, so this rule is a placebo at present.)
 // * l) A reference to System.Composition.Convention must be to version 1.0.30 or newer.
 // * m) Referring to one of a set of disallowed methods is prohibited. (There are a few dozen unsupported methods specified in GatekeeperConfig.xml.)
@@ -43,7 +43,8 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     ClassInterfaceAttributeValueDescriptor,
                     TypeInfoGUIDDescriptor,
                     TypeGetRuntimeMethodsDescriptor,
-                    TypeGetTypeDescriptor);
+                    TypeGetTypeDescriptor,
+                    BeginEndInvokeDescriptor);
             }
         }
 
@@ -60,8 +61,16 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             context.RegisterCompilationStartAction(ClassInterfaceAttribute);
             context.RegisterCompilationStartAction(TypeInfoGUID);
             context.RegisterCompilationStartAction(TypeMethods);
+            context.RegisterSyntaxNodeAction(
+                   (nodeContext) =>
+                   {
+                       AnalyzeForDelegateMethods(nodeContext, (MemberAccessExpressionSyntax)nodeContext.Node);
+                   },
+                SyntaxKind.SimpleMemberAccessExpression);
         }
 
+        // An array type cannot have a pointer type as an element type.
+        // An array type cannot have more than 4 dimensions.
         private void AnalyzeArrayTypeSyntax(SyntaxNodeAnalysisContext context, ArrayTypeSyntax arrayTypeSyntax)
         {
             // Detect array types with more than four dimensions.
@@ -111,6 +120,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
+        // A type that implements IEquatable<T> must override Object.Equals().
         private void AnalyzeTypeForIEquatable(SymbolAnalysisContext context, INamedTypeSymbol namedType, INamedTypeSymbol iEquatable, IMethodSymbol objectEquals)
         {
             if (namedType.TypeKind == TypeKind.Class)
@@ -200,6 +210,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
+        // Neither ClassInterfaceType.AutoDispatch nor ClassInterfaceType.GetHashCode can be used in creating a System.Runtime.InteropServices.ClassInterfaceAttribute instance. Only ClassInterfaceType.None is allowed.
         private void AnalyzeForClassInterfaceAttribute(SymbolAnalysisContext context, INamedTypeSymbol namedType, IMethodSymbol classInterfaceAttributeConstructor1, IMethodSymbol classInterfaceAttributeConstructor2, int autoDispatch, int autoDual)
         {
             if (namedType.TypeKind == TypeKind.Class)
@@ -241,6 +252,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
+        // The TypeInfo.GUID property will throw PlatformNotSupportedException if the type does not have a Guid attribute applied to it.
         private void AnalyzeForTypeInfoGUID(SyntaxNodeAnalysisContext context, INamedTypeSymbol typeInfo, IPropertySymbol guid)
         {
             SimpleNameSyntax memberName = null;
@@ -299,11 +311,13 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
 
                 if (getRuntimeMethods != null && getType != null)
                 {
-                    context.RegisterSyntaxNodeAction(nodeContext => AnalyzeForTypeMethods(nodeContext, getRuntimeMethods, getType), SyntaxKind.SimpleMemberAccessExpression, SyntaxKind.ConditionalAccessExpression);
+                    context.RegisterSyntaxNodeAction(nodeContext => AnalyzeForTypeMethods(nodeContext, getRuntimeMethods, getType), SyntaxKind.SimpleMemberAccessExpression);
                 }
             }
         }
 
+        // Type.GetRuntimeMethods() does not return hidden methods in base types. (This seems like an informational message only.)
+        // Type.GetType(string) searches System.Runtime only.Use Assembly.GetType(string) to search another assembly.
         private void AnalyzeForTypeMethods(SyntaxNodeAnalysisContext context, IMethodSymbol getRuntimeMethods, IMethodSymbol getType)
         {
             SimpleNameSyntax memberName = null;
@@ -313,6 +327,26 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             {
                 CheckForMember(context, memberName, getType, TypeGetTypeDescriptor);
                 CheckForMember(context, memberName, getRuntimeMethods, TypeGetRuntimeMethodsDescriptor);
+            }
+        }
+
+        // Referring to either the BeginInvoke method or the EndInvoke method of a delegate type is prohibited.
+        private void AnalyzeForDelegateMethods(SyntaxNodeAnalysisContext context, MemberAccessExpressionSyntax memberAccess)
+        {
+            SimpleNameSyntax memberName = null;
+            ExpressionSyntax baseReference = null;
+
+            if (TryGetMemberReferenceInfo(memberAccess, out baseReference, out memberName))
+            {
+                string memberID = memberName.Identifier.Text;
+                if (memberID == "BeginInvoke" || memberID == "EndInvoke")
+                {
+                    ITypeSymbol baseReferenceType = context.SemanticModel.GetTypeInfo(baseReference).Type;
+                    if (baseReferenceType != null && baseReferenceType.TypeKind == TypeKind.Delegate)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(BeginEndInvokeDescriptor, memberName.GetLocation()));
+                    }
+                }
             }
         }
 
@@ -447,6 +481,15 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             s_localizableTypeGetTypeMessageAndTitle,
             "Reliability",
             DiagnosticSeverity.Info,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableBeginEndInvokeMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeBeginEndInvokeMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor BeginEndInvokeDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeBeginEndInvokeRuleId,
+            s_localizableBeginEndInvokeMessageAndTitle,
+            s_localizableBeginEndInvokeMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
             isEnabledByDefault: true);
     }
 }

@@ -245,5 +245,49 @@ class Test
                 GetCSharpResultAt(20, 20, NativeGatekeeperAnalyzer.TypeGetTypeDescriptor),
                 GetCSharpResultAt(21, 20, NativeGatekeeperAnalyzer.TypeGetRuntimeMethodsDescriptor));
         }
+
+        [Fact]
+        public void BeginEndInvoke()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+
+
+class OK
+{
+    public int BeginInvoke() { get { return 0; } }
+    public int EndInvoke(int x) { get { return 0; } }
+}
+
+delegate int Mumble(int);
+
+class Test
+{
+    public void TestMethod(OK p1, System.Action<int> p2, System.Func<int, int> p3, Mumble p4)
+    {
+        var a = p1.BeginInvoke();
+        p1.EndInvoke(a);
+        var b = p2.BeginInvoke(3);
+        p2.EndInvoke(b);
+        p2.Invoke(3);
+        var c = p3.BeginInvoke(3);
+        p3.EndInvoke(c);
+        p3.Invoke(3);
+        var d = p4.BeginInvoke(3);
+        p4.EndInvoke(d);
+        p4.Invoke(3);
+    }
+}
+";
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(20, 20, NativeGatekeeperAnalyzer.BeginEndInvokeDescriptor),
+                GetCSharpResultAt(21, 12, NativeGatekeeperAnalyzer.BeginEndInvokeDescriptor),
+                GetCSharpResultAt(23, 20, NativeGatekeeperAnalyzer.BeginEndInvokeDescriptor),
+                GetCSharpResultAt(24, 12, NativeGatekeeperAnalyzer.BeginEndInvokeDescriptor),
+                GetCSharpResultAt(26, 20, NativeGatekeeperAnalyzer.BeginEndInvokeDescriptor),
+                GetCSharpResultAt(27, 12, NativeGatekeeperAnalyzer.BeginEndInvokeDescriptor));
+        }
     }
 }

@@ -279,6 +279,9 @@
   <data name="NetNativeIEquatableEqualsMessage" xml:space="preserve">
     <value>.Net Native requires that a class that implements System.IEquatable&lt;T&gt; must also override Object.Equals(object).</value>
   </data>
+  <data name="NetNativeBeginEndInvokeMessage" xml:space="preserve">
+    <value>.Net Native does not support invoking the BeginInvoke or EndInvoke methods of delegate types.</value>
+  </data>
   <data name="NetNativeTypeGetRuntimeMethodsMessage" xml:space="preserve">
     <value>.Net Native's implementation of System.Type.GetRuntimeMethods() does not return hidden methods in base types.</value>
   </data>
