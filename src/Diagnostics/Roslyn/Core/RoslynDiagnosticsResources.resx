@@ -282,6 +282,9 @@
   <data name="NetNativeBeginEndInvokeMessage" xml:space="preserve">
     <value>.Net Native does not support invoking the BeginInvoke or EndInvoke methods of delegate types.</value>
   </data>
+  <data name="NetNativeEventSourceLocalizationMessage" xml:space="preserve">
+    <value>.Net Native does not support specifying a value for the LocalizationResources property of an EventSourceAttribute attribute.</value>
+  </data>
   <data name="NetNativeMultipleDefaultInterfacesMessage" xml:space="preserve">
     <value>.Net Native does not support classes that implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute.</value>
   </data>

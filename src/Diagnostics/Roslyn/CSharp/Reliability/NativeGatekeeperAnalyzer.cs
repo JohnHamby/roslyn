@@ -4,7 +4,7 @@
 //
 // a) An array type cannot have a pointer type as an element type.
 // b) A type that implements IEquatable<T> must override Object.Equals().
-// * c) Creation of a System.Diagnostics.Tracing.EventSourceAttribute instance cannot specify a value for the LocalizationResources property.
+// c) Creation of a System.Diagnostics.Tracing.EventSourceAttribute instance cannot specify a value for the LocalizationResources property.
 // d) Type.GetRuntimeMethods() does not return hidden methods in base types. (This seems like an informational message only.)
 // e) Type.GetType(string) searches System.Runtime only.Use Assembly.GetType(string) to search another assembly.
 // * f) The body of an infinite loop must do more than store constant values to locals.
@@ -20,7 +20,7 @@
 // A class cannot implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute.
 // * q) A public member of a type defined in a WinMD cannot refer to the types System.IntPtr or System.UIntPtr in a method signature, method return type, or property type. (Gatekeeper also appears to be attempting to prohibit using these types as generic type arguments to public types, but the code looks buggy and I’m not 100% sure of the intent.I have a question out to a Project N developer.)
 
-
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -45,7 +45,8 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     TypeGetRuntimeMethodsDescriptor,
                     TypeGetTypeDescriptor,
                     BeginEndInvokeDescriptor,
-                    MultipleDefaultInterfacesDescriptor);
+                    MultipleDefaultInterfacesDescriptor,
+                    EventSourceLocalizationDescriptor);
             }
         }
 
@@ -69,6 +70,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                    },
                 SyntaxKind.SimpleMemberAccessExpression);
             context.RegisterCompilationStartAction(InterfaceDefaultAttribute);
+            context.RegisterCompilationStartAction(EventSourceLocalization);
         }
 
         // An array type cannot have a pointer type as an element type.
@@ -389,6 +391,44 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
+        private void EventSourceLocalization(CompilationStartAnalysisContext context)
+        {
+            // Find System.Diagnostics.Tracing.EventSourceAttribute and its LocalizationResources property, and register an action if both are present.
+
+            INamedTypeSymbol eventSourceAttribute = context.Compilation.GetTypeByMetadataName("System.Diagnostics.Tracing.EventSourceAttribute");
+            if (eventSourceAttribute != null)
+            {
+                foreach (ISymbol member in eventSourceAttribute.GetMembers("LocalizationResources"))
+                {
+                    if (member.Kind == SymbolKind.Property)
+                    {
+                        context.RegisterSymbolAction((symbolContext) => AnalyzeForEventSourceLocalization(symbolContext, (INamedTypeSymbol)symbolContext.Symbol, eventSourceAttribute, (IPropertySymbol)member), SymbolKind.NamedType);
+                    }
+                }
+            }
+        }
+
+        // Creation of a System.Diagnostics.Tracing.EventSourceAttribute instance cannot specify a value for the LocalizationResources property.
+        private void AnalyzeForEventSourceLocalization(SymbolAnalysisContext context, INamedTypeSymbol type, INamedTypeSymbol eventSourceAttribute, IPropertySymbol localizationResources)
+        {
+            if (type.TypeKind == TypeKind.Class)
+            {
+                foreach (AttributeData attribute in type.GetAttributes())
+                {
+                    if (attribute.AttributeClass.Equals(eventSourceAttribute))
+                    {
+                        foreach (KeyValuePair<string, TypedConstant> propertyAssignment in attribute.NamedArguments)
+                        {
+                            if (propertyAssignment.Key == localizationResources.Name)
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(EventSourceLocalizationDescriptor, attribute.ApplicationSyntaxReference.GetSyntax().GetLocation()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         private void CheckForMember(SyntaxNodeAnalysisContext context, SimpleNameSyntax memberName, ISymbol member, DiagnosticDescriptor diagnostic)
         {
             if (memberName != null && memberName.Identifier.Text == member.Name)
@@ -536,6 +576,15 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             RoslynDiagnosticIds.NetNativeMultipleDefaultInterfacesRuleId,
             s_localizableMultipleDefaultInterfacesMessageAndTitle,
             s_localizableMultipleDefaultInterfacesMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableEventSourceLocalizationMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeEventSourceLocalizationMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor EventSourceLocalizationDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeEventSourceLocalizationRuleId,
+            s_localizableEventSourceLocalizationMessageAndTitle,
+            s_localizableEventSourceLocalizationMessageAndTitle,
             "Reliability",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);

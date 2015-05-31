@@ -359,5 +359,45 @@ class MultiLevel : BaseLevel, I2
                 GetCSharpResultAt(48, 7, NativeGatekeeperAnalyzer.MultipleDefaultInterfacesDescriptor),
                 GetCSharpResultAt(56, 7, NativeGatekeeperAnalyzer.MultipleDefaultInterfacesDescriptor));
         }
+
+        [Fact]
+        public void EventSourceLocalization()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Diagnostics.Tracing;
+
+[EventSource(Name = ""Fred"")]
+class OK
+{
+}
+
+[EventSource(LocalizationResources = ""Barney"")]
+class Bad
+{
+}
+
+[Custom(LocalizationResources = ""Barney"")]
+[EventSource(LocalizationResources = ""Barney"")]
+class Bad1
+{
+}
+
+[Custom(LocalizationResources = ""Barney"")]
+class OK1
+{
+}
+
+public class CustomAttribute : System.Attribute
+{
+    public string LocalizationResources { get { return ""Wilma""; } set { } }
+}
+";
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(11, 2, NativeGatekeeperAnalyzer.EventSourceLocalizationDescriptor),
+                GetCSharpResultAt(17, 2, NativeGatekeeperAnalyzer.EventSourceLocalizationDescriptor));
+        }
     }
 }

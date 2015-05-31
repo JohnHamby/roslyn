@@ -38,5 +38,6 @@ namespace Roslyn.Diagnostics.Analyzers
         public const string NetNativeTypeGetTypeRuleId = "RS1006";
         public const string NetNativeBeginEndInvokeRuleId = "RS1007";
         public const string NetNativeMultipleDefaultInterfacesRuleId = "RS1008";
+        public const string NetNativeEventSourceLocalizationRuleId = "RS1009";
     }
 }

@@ -340,6 +340,15 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native does not support specifying a value for the LocalizationResources property of an EventSourceAttribute attribute..
+        /// </summary>
+        internal static string NetNativeEventSourceLocalizationMessage {
+            get {
+                return ResourceManager.GetString("NetNativeEventSourceLocalizationMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to .Net Native requires that a class that implements System.IEquatable&lt;T&gt; must also override Object.Equals(object)..
         /// </summary>
         internal static string NetNativeIEquatableEqualsMessage {
