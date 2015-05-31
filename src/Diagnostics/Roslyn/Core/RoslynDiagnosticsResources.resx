@@ -300,4 +300,10 @@
   <data name="NetNativeTypeInfoGUIDMessage" xml:space="preserve">
     <value>.Net Native's implementation of System.Reflection.TypeInfo.GUID throws PlatformNotSupportedException if the type does not have a System.Runtime.InteropServices.GuidAttribute attribute.</value>
   </data>
+  <data name="NetNativeUnsupportedMethodMessage" xml:space="preserve">
+    <value>.Net Native does not support method '{0}'.</value>
+  </data>
+  <data name="NetNativeUnsupportedTypeMessage" xml:space="preserve">
+    <value>.Net Native does not support type '{0}'.</value>
+  </data>
 </root>

@@ -66,6 +66,7 @@
       <HintPath>..\..\..\..\packages\Microsoft.Composition.$(MicrosoftCompositionVersion)\lib\portable-net45+win8+wp8+wpa81\System.Composition.TypedParts.dll</HintPath>
     </Reference>
     <Reference Include="System.Core" />
+    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config">
@@ -87,6 +88,7 @@
     <Compile Include="Performance\LinqAnalyzer.cs" />
     <Compile Include="Reliability\CSharpDirectlyAwaitingTaskAnalyzer.cs" />
     <Compile Include="Reliability\CSharpDirectlyAwaitingTaskFix.cs" />
+    <Compile Include="Reliability\GatekeeperConfig.cs" />
     <Compile Include="Reliability\ImmutableCollectionAnalyzer.cs" />
     <Compile Include="Reliability\NativeGatekeeperAnalyzer.cs" />
   </ItemGroup>

@@ -15,7 +15,7 @@
 // * k) A reference to one of a set of disallowed contract assemblies is prohibited. (The set of unsupported contracts in GatekeeperConfig.xml appears to be empty, so this rule is a placebo at present.)
 // * l) A reference to System.Composition.Convention must be to version 1.0.30 or newer.
 // * m) Referring to one of a set of disallowed methods is prohibited. (There are a few dozen unsupported methods specified in GatekeeperConfig.xml.)
-// * n) Referring to one of a set of disallowed types is prohibited. (There are 14 unsupported types specified in GatekeeperConfig.xml)
+// *** n) Referring to one of a set of disallowed types is prohibited. (There are 14 unsupported types specified in GatekeeperConfig.xml)
 // * o) A value type must not exceed 1,000,000 bytes in instance size.
 // A class cannot implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute.
 // * q) A public member of a type defined in a WinMD cannot refer to the types System.IntPtr or System.UIntPtr in a method signature, method return type, or property type. (Gatekeeper also appears to be attempting to prohibit using these types as generic type arguments to public types, but the code looks buggy and I’m not 100% sure of the intent.I have a question out to a Project N developer.)
@@ -47,7 +47,9 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     BeginEndInvokeDescriptor,
                     MultipleDefaultInterfacesDescriptor,
                     EventSourceLocalizationDescriptor,
-                    EmptyInfiniteLoopDescriptor);
+                    EmptyInfiniteLoopDescriptor,
+                    UnsupportedTypeDescriptor,
+                    UnsupportedMethodDescriptor);
             }
         }
 
@@ -90,6 +92,13 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     AnalyzeForEmptyInfiniteLoop(nodeContext, (ForStatementSyntax)nodeContext.Node);
                 },
                 SyntaxKind.ForStatement);
+            context.RegisterSyntaxNodeAction(
+                (nodeContext) =>
+                {
+                    AnalyzeForEmptyInfiniteLoop(nodeContext, (GotoStatementSyntax)nodeContext.Node);
+                },
+                SyntaxKind.GotoStatement);
+            context.RegisterCompilationStartAction(UnsupportedAPIs);
         }
 
         // An array type cannot have a pointer type as an element type.
@@ -448,6 +457,47 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
+        private void UnsupportedAPIs(CompilationStartAnalysisContext context)
+        {
+            try
+            {
+                Microsoft.Gatekeeper.GatekeeperConfig gatekeeperInfo = Microsoft.Gatekeeper.GatekeeperConfig.CreateFromFile("\\R2\\Open\\src\\Diagnostics\\Roslyn\\CSharp\\Reliability\\GatekeeperConfig.xml");
+
+                HashSet<INamedTypeSymbol> unsupportedTypes = new HashSet<INamedTypeSymbol>();
+                foreach (string unsupportedTypeName in gatekeeperInfo.UnsupportedTypes)
+                {
+                    INamedTypeSymbol unsupportedType = context.Compilation.GetTypeByMetadataName(unsupportedTypeName.StartsWith("T:") ? unsupportedTypeName.Substring(2) : unsupportedTypeName);
+                    if (unsupportedType != null)
+                    {
+                        unsupportedTypes.Add(unsupportedType);
+                    }
+                }
+
+                HashSet<string> unsupportedMethods = new HashSet<string>();
+                foreach (string unsupportedMethod in gatekeeperInfo.UnsupportedMethods)
+                {
+                    unsupportedMethods.Add(unsupportedMethod.StartsWith("M:") ? unsupportedMethod.Substring(2) : unsupportedMethod);
+                }
+
+                HashSet<System.Tuple<string, string>> unsupportedContracts = gatekeeperInfo.UnsupportedContracts;
+
+                context.RegisterSyntaxNodeAction((nodeContext) => { AnalyzeForUnsupportedType(nodeContext, (TypeSyntax)nodeContext.Node, unsupportedTypes); }, SyntaxKind.IdentifierName);
+            }
+            catch (System.Exception)
+            {
+            }
+        }
+
+        // Referring to one of a set of disallowed types is prohibited.
+        private void AnalyzeForUnsupportedType(SyntaxNodeAnalysisContext context, TypeSyntax typeReference, HashSet<INamedTypeSymbol> unsupportedTypes)
+        {
+            INamedTypeSymbol type = context.SemanticModel.GetSymbolInfo(typeReference).Symbol as INamedTypeSymbol;
+            if (type != null && unsupportedTypes.Contains(type))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(UnsupportedTypeDescriptor, typeReference.GetLocation(), type.ToDisplayString()));
+            }
+        }
+
         private void AnalyzeForEmptyInfiniteLoop(SyntaxNodeAnalysisContext context, WhileStatementSyntax whileLoop)
         {
             AnalyzeForEmptyInfiniteLoop(context, whileLoop, whileLoop.Condition, whileLoop.Statement);
@@ -469,6 +519,13 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
 
             AnalyzeForEmptyInfiniteLoop(context, forLoop, forLoop.Condition, forLoop.Statement);
+        }
+
+        private void AnalyzeForEmptyInfiniteLoop(SyntaxNodeAnalysisContext context, GotoStatementSyntax gotoStatement)
+        {
+            // ToDo: Start at the target label and scan forward. If the scan hits the goto before encountering
+            // a statement that isn't a placebo or the end of the method, that's an empty infinite loop.
+            // The goto might be in an inner block.
         }
 
         // The body of an infinite loop must do more than store constant values to locals.
@@ -724,6 +781,24 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             RoslynDiagnosticIds.NetNativeEmptyInfiniteLoopRuleId,
             s_localizableEmptyInfiniteLoopMessageAndTitle,
             s_localizableEmptyInfiniteLoopMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableUnsupportedTypeMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeUnsupportedTypeMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor UnsupportedTypeDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeUnsupportedTypeRuleId,
+            s_localizableUnsupportedTypeMessageAndTitle,
+            s_localizableUnsupportedTypeMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableUnsupportedMethodMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeUnsupportedMethodMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor UnsupportedMethodDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeUnsupportedMethodRuleId,
+            s_localizableUnsupportedMethodMessageAndTitle,
+            s_localizableUnsupportedMethodMessageAndTitle,
             "Reliability",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);

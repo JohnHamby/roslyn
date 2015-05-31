@@ -495,5 +495,36 @@ class Test
                 GetCSharpResultAt(60, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
                 GetCSharpResultAt(68, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor));
         }
+
+        [Fact]
+        public void UnsupportedTypes()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
+
+class Test
+{
+    VariantWrapper F1;
+    Test F3;
+    BStrWrapper M1(System.Runtime.InteropServices.ICustomAdapter p1)
+    {
+        ComEventsHelper l1 = null;
+        object local = (SafeBuffer)p1;
+        object another = new System.Runtime.InteropServices.DispatchWrapper(null);
+        return null;
+    }
+}
+";
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(8, 5, NativeGatekeeperAnalyzer.UnsupportedTypeDescriptor, "System.Runtime.InteropServices.VariantWrapper"),
+                GetCSharpResultAt(10, 5, NativeGatekeeperAnalyzer.UnsupportedTypeDescriptor, "System.Runtime.InteropServices.BStrWrapper"),
+                GetCSharpResultAt(10, 51, NativeGatekeeperAnalyzer.UnsupportedTypeDescriptor, "System.Runtime.InteropServices.ICustomAdapter"),
+                GetCSharpResultAt(12, 9, NativeGatekeeperAnalyzer.UnsupportedTypeDescriptor, "System.Runtime.InteropServices.ComEventsHelper"),
+                GetCSharpResultAt(13, 25, NativeGatekeeperAnalyzer.UnsupportedTypeDescriptor, "System.Runtime.InteropServices.SafeBuffer"),
+                GetCSharpResultAt(14, 61, NativeGatekeeperAnalyzer.UnsupportedTypeDescriptor, "System.Runtime.InteropServices.DispatchWrapper"));
+        }
     }
 }

@@ -403,6 +403,24 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native does not support method &apos;{0}&apos;..
+        /// </summary>
+        internal static string NetNativeUnsupportedMethodMessage {
+            get {
+                return ResourceManager.GetString("NetNativeUnsupportedMethodMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to .Net Native does not support type &apos;{0}&apos;..
+        /// </summary>
+        internal static string NetNativeUnsupportedTypeMessage {
+            get {
+                return ResourceManager.GetString("NetNativeUnsupportedTypeMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Override Object.Equals(object) when implementing IEquatable&lt;T&gt; .
         /// </summary>
         internal static string OverrideObjectEqualsDescription {
