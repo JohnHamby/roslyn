@@ -7,7 +7,7 @@
 // c) Creation of a System.Diagnostics.Tracing.EventSourceAttribute instance cannot specify a value for the LocalizationResources property.
 // d) Type.GetRuntimeMethods() does not return hidden methods in base types. (This seems like an informational message only.)
 // e) Type.GetType(string) searches System.Runtime only.Use Assembly.GetType(string) to search another assembly.
-// * f) The body of an infinite loop must do more than store constant values to locals.
+// f) The body of an infinite loop must do more than store constant values to locals.
 // g) An array type cannot have more than 4 dimensions.
 // h) The TypeInfo.GUID property will throw PlatformNotSupportedException if the type does not have a Guid attribute applied to it.
 // i) Neither ClassInterfaceType.AutoDispatch nor ClassInterfaceType.GetHashCode can be used in creating a System.Runtime.InteropServices.ClassInterfaceAttribute instance. Only ClassInterfaceType.None is allowed.
@@ -46,7 +46,8 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     TypeGetTypeDescriptor,
                     BeginEndInvokeDescriptor,
                     MultipleDefaultInterfacesDescriptor,
-                    EventSourceLocalizationDescriptor);
+                    EventSourceLocalizationDescriptor,
+                    EmptyInfiniteLoopDescriptor);
             }
         }
 
@@ -71,6 +72,24 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                 SyntaxKind.SimpleMemberAccessExpression);
             context.RegisterCompilationStartAction(InterfaceDefaultAttribute);
             context.RegisterCompilationStartAction(EventSourceLocalization);
+            context.RegisterSyntaxNodeAction(
+                (nodeContext) =>
+                {
+                    AnalyzeForEmptyInfiniteLoop(nodeContext, (WhileStatementSyntax)nodeContext.Node);
+                },
+                SyntaxKind.WhileStatement);
+            context.RegisterSyntaxNodeAction(
+                (nodeContext) =>
+                {
+                    AnalyzeForEmptyInfiniteLoop(nodeContext, (DoStatementSyntax)nodeContext.Node);
+                },
+                SyntaxKind.DoStatement);
+            context.RegisterSyntaxNodeAction(
+                (nodeContext) =>
+                {
+                    AnalyzeForEmptyInfiniteLoop(nodeContext, (ForStatementSyntax)nodeContext.Node);
+                },
+                SyntaxKind.ForStatement);
         }
 
         // An array type cannot have a pointer type as an element type.
@@ -429,6 +448,117 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             }
         }
 
+        private void AnalyzeForEmptyInfiniteLoop(SyntaxNodeAnalysisContext context, WhileStatementSyntax whileLoop)
+        {
+            AnalyzeForEmptyInfiniteLoop(context, whileLoop, whileLoop.Condition, whileLoop.Statement);
+        }
+
+        private void AnalyzeForEmptyInfiniteLoop(SyntaxNodeAnalysisContext context, DoStatementSyntax doLoop)
+        {
+            AnalyzeForEmptyInfiniteLoop(context, doLoop, doLoop.Condition, doLoop.Statement);
+        }
+
+        private void AnalyzeForEmptyInfiniteLoop(SyntaxNodeAnalysisContext context, ForStatementSyntax forLoop)
+        {
+            foreach (ExpressionSyntax incrementor in forLoop.Incrementors)
+            {
+                if (!AnalyzeForEmptyInfiniteLoopBody(context, incrementor))
+                {
+                    return;
+                }
+            }
+
+            AnalyzeForEmptyInfiniteLoop(context, forLoop, forLoop.Condition, forLoop.Statement);
+        }
+
+        // The body of an infinite loop must do more than store constant values to locals.
+        private void AnalyzeForEmptyInfiniteLoop(SyntaxNodeAnalysisContext context, StatementSyntax loop, ExpressionSyntax loopCondition, StatementSyntax loopBody)
+        {
+            Optional<object> condition = loopCondition != null ? context.SemanticModel.GetConstantValue(loopCondition) : true;
+            if (condition.HasValue && condition.Value is bool && ((bool)condition.Value))
+            {
+                if (AnalyzeForEmptyInfiniteLoopBody(context, loopBody))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(EmptyInfiniteLoopDescriptor, loop.GetLocation()));
+                }
+            }
+        }
+
+        private bool AnalyzeForEmptyInfiniteLoopBody(SyntaxNodeAnalysisContext context, ExpressionSyntax expression)
+        {
+            switch (expression.Kind())
+            {
+                case SyntaxKind.SimpleAssignmentExpression:
+                    {
+                        AssignmentExpressionSyntax assignment = (AssignmentExpressionSyntax)expression;
+                        ISymbol target = context.SemanticModel.GetSymbolInfo(assignment.Left).Symbol;
+                        if (target != null && (target.Kind == SymbolKind.Local || target.Kind == SymbolKind.Parameter))
+                        {
+                            if (context.SemanticModel.GetConstantValue(assignment.Right).HasValue)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+
+                    break;
+            }
+
+            return false;
+        }
+
+        private bool AnalyzeForEmptyInfiniteLoopBody(SyntaxNodeAnalysisContext context, StatementSyntax statement)
+        {
+            switch (statement.Kind())
+            {
+                case SyntaxKind.ExpressionStatement:
+                    return AnalyzeForEmptyInfiniteLoopBody(context, ((ExpressionStatementSyntax)statement).Expression);
+
+                case SyntaxKind.EmptyStatement:
+                    return true;
+
+                case SyntaxKind.Block:
+                    {
+                        BlockSyntax block = (BlockSyntax)statement;
+                        foreach (StatementSyntax nestedStatement in block.Statements)
+                        {
+                            if (!AnalyzeForEmptyInfiniteLoopBody(context, nestedStatement))
+                            {
+                                return false;
+                            }
+                        }
+                    }
+
+                    return true;
+
+                case SyntaxKind.LocalDeclarationStatement:
+                    {
+                        LocalDeclarationStatementSyntax declarationStatement = (LocalDeclarationStatementSyntax)statement;
+                        foreach (VariableDeclaratorSyntax declarator in declarationStatement.Declaration.Variables)
+                        {
+                            if (declarator.Initializer != null)
+                            {
+                                if (declarator.Initializer.Value != null)
+                                {
+                                    if (!context.SemanticModel.GetConstantValue(declarator.Initializer.Value).HasValue)
+                                    {
+                                        // Initializer has a non-constant value.
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    return true;
+
+                case SyntaxKind.LabeledStatement:
+                    return AnalyzeForEmptyInfiniteLoopBody(context, ((LabeledStatementSyntax)statement).Statement);
+            }
+
+            return false;
+        }
+
         private void CheckForMember(SyntaxNodeAnalysisContext context, SimpleNameSyntax memberName, ISymbol member, DiagnosticDescriptor diagnostic)
         {
             if (memberName != null && memberName.Identifier.Text == member.Name)
@@ -585,6 +715,15 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
             RoslynDiagnosticIds.NetNativeEventSourceLocalizationRuleId,
             s_localizableEventSourceLocalizationMessageAndTitle,
             s_localizableEventSourceLocalizationMessageAndTitle,
+            "Reliability",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
+        private static readonly LocalizableString s_localizableEmptyInfiniteLoopMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeEmptyInfiniteLoopMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
+        public static readonly DiagnosticDescriptor EmptyInfiniteLoopDescriptor = new DiagnosticDescriptor(
+            RoslynDiagnosticIds.NetNativeEmptyInfiniteLoopRuleId,
+            s_localizableEmptyInfiniteLoopMessageAndTitle,
+            s_localizableEmptyInfiniteLoopMessageAndTitle,
             "Reliability",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);

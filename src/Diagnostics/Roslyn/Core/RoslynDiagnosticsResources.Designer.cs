@@ -340,6 +340,15 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native does not support infinite loops with effect-free bodies..
+        /// </summary>
+        internal static string NetNativeEmptyInfiniteLoopMessage {
+            get {
+                return ResourceManager.GetString("NetNativeEmptyInfiniteLoopMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to .Net Native does not support specifying a value for the LocalizationResources property of an EventSourceAttribute attribute..
         /// </summary>
         internal static string NetNativeEventSourceLocalizationMessage {

@@ -399,5 +399,101 @@ public class CustomAttribute : System.Attribute
                 GetCSharpResultAt(11, 2, NativeGatekeeperAnalyzer.EventSourceLocalizationDescriptor),
                 GetCSharpResultAt(17, 2, NativeGatekeeperAnalyzer.EventSourceLocalizationDescriptor));
         }
+
+        [Fact]
+        public void EmptyInfiniteLoop()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+
+class Test
+{
+    void M(bool b, int x)
+    {
+        int y = 0;
+
+        while (b)
+        {
+        }
+
+        while (true)
+        {
+            b = !b;
+        }
+
+        while (true)
+        {
+        }
+
+        while (true)
+        {
+            ;
+        }
+
+        while (true);
+
+        while (true)
+        {
+            y = 3;
+        }
+
+        while (true)
+        {
+            int z = 112, zz = 22;
+        }
+
+        while (true)
+        {
+            int zz = y;
+        }
+
+        do { } while (true);
+
+        do { } while (false);
+
+        do { int aa = 10, bb, cc = x; } while (true);
+
+        for (int i = 10; ; )
+        {
+        }
+
+        for (int i = 10; true; );
+
+        for (int i = 10; true; i++);
+
+        for (;;)
+        {
+            x = 12;
+        }
+
+        for (;;)
+            x = y;
+
+        for (;;)
+        {
+            target: ;
+        }
+
+        for (;;)
+        {
+            target: x = y;
+        }
+    }
+}
+";
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(20, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(24, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(29, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(31, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(36, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(46, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(52, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(56, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(60, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor),
+                GetCSharpResultAt(68, 9, NativeGatekeeperAnalyzer.EmptyInfiniteLoopDescriptor));
+        }
     }
 }

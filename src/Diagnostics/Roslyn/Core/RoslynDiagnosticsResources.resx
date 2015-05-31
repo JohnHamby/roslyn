@@ -282,6 +282,9 @@
   <data name="NetNativeBeginEndInvokeMessage" xml:space="preserve">
     <value>.Net Native does not support invoking the BeginInvoke or EndInvoke methods of delegate types.</value>
   </data>
+  <data name="NetNativeEmptyInfiniteLoopMessage" xml:space="preserve">
+    <value>.Net Native does not support infinite loops with effect-free bodies.</value>
+  </data>
   <data name="NetNativeEventSourceLocalizationMessage" xml:space="preserve">
     <value>.Net Native does not support specifying a value for the LocalizationResources property of an EventSourceAttribute attribute.</value>
   </data>
