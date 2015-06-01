@@ -526,5 +526,35 @@ class Test
                 GetCSharpResultAt(13, 25, NativeGatekeeperAnalyzer.UnsupportedTypeDescriptor, "System.Runtime.InteropServices.SafeBuffer"),
                 GetCSharpResultAt(14, 61, NativeGatekeeperAnalyzer.UnsupportedTypeDescriptor, "System.Runtime.InteropServices.DispatchWrapper"));
         }
+
+        [Fact]
+        public void UnsupportedMethods()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
+
+class Test
+{
+    void M(System.Reflection.PropertyInfo p0, System.Delegate p1, System.IO.Stream p2, System.Threading.Thread p3)
+    {
+        p0.GetAccessors(false);
+        p0.GetAccessors();                      // OK
+        var x = p1.Method;
+        System.Diagnostics.Debugger.Launch();
+        p2.BeginWrite(null, 0, 0, null, null);
+        p3.CurrentCulture = null;
+    }
+}
+";
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(10, 12, NativeGatekeeperAnalyzer.UnsupportedMethodDescriptor, "System.Reflection.PropertyInfo.GetAccessors(bool)"),
+                GetCSharpResultAt(12, 20, NativeGatekeeperAnalyzer.UnsupportedMethodDescriptor, "System.Delegate.Method.get"),
+                GetCSharpResultAt(13, 37, NativeGatekeeperAnalyzer.UnsupportedMethodDescriptor, "System.Diagnostics.Debugger.Launch()"),
+                GetCSharpResultAt(14, 12, NativeGatekeeperAnalyzer.UnsupportedMethodDescriptor, "System.IO.Stream.BeginWrite(byte[], int, int, System.AsyncCallback, object)"),
+                GetCSharpResultAt(15, 12, NativeGatekeeperAnalyzer.UnsupportedMethodDescriptor, "System.Threading.Thread.CurrentCulture.set"));
+        }
     }
 }

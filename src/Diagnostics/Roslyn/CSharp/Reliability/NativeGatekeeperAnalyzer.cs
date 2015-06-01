@@ -14,8 +14,8 @@
 // j) Referring to either the BeginInvoke method or the EndInvoke method of a delegate type is prohibited.
 // * k) A reference to one of a set of disallowed contract assemblies is prohibited. (The set of unsupported contracts in GatekeeperConfig.xml appears to be empty, so this rule is a placebo at present.)
 // * l) A reference to System.Composition.Convention must be to version 1.0.30 or newer.
-// * m) Referring to one of a set of disallowed methods is prohibited. (There are a few dozen unsupported methods specified in GatekeeperConfig.xml.)
-// *** n) Referring to one of a set of disallowed types is prohibited. (There are 14 unsupported types specified in GatekeeperConfig.xml)
+// m) Referring to one of a set of disallowed methods is prohibited. (There are a few dozen unsupported methods specified in GatekeeperConfig.xml.)
+// n) Referring to one of a set of disallowed types is prohibited. (There are 14 unsupported types specified in GatekeeperConfig.xml)
 // * o) A value type must not exceed 1,000,000 bytes in instance size.
 // A class cannot implement more than one interface that has a Windows.Foundation.Metadata.DefaultAttribute attribute.
 // * q) A public member of a type defined in a WinMD cannot refer to the types System.IntPtr or System.UIntPtr in a method signature, method return type, or property type. (Gatekeeper also appears to be attempting to prohibit using these types as generic type arguments to public types, but the code looks buggy and I’m not 100% sure of the intent.I have a question out to a Project N developer.)
@@ -461,6 +461,7 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
         {
             try
             {
+                // ToDo: Get the configuation file from context.Option.AdditionalFiles.
                 Microsoft.Gatekeeper.GatekeeperConfig gatekeeperInfo = Microsoft.Gatekeeper.GatekeeperConfig.CreateFromFile("\\R2\\Open\\src\\Diagnostics\\Roslyn\\CSharp\\Reliability\\GatekeeperConfig.xml");
 
                 HashSet<INamedTypeSymbol> unsupportedTypes = new HashSet<INamedTypeSymbol>();
@@ -473,28 +474,160 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                     }
                 }
 
-                HashSet<string> unsupportedMethods = new HashSet<string>();
-                foreach (string unsupportedMethod in gatekeeperInfo.UnsupportedMethods)
+                HashSet<IMethodSymbol> unsupportedMethods = new HashSet<IMethodSymbol>();
+                foreach (string unsupportedMethodName in gatekeeperInfo.UnsupportedMethods)
                 {
-                    unsupportedMethods.Add(unsupportedMethod.StartsWith("M:") ? unsupportedMethod.Substring(2) : unsupportedMethod);
+                    // Parse the method name and signature and attempt to find a matching method symbol.
+
+                    string strippedMethodName = unsupportedMethodName.StartsWith("M:") ? unsupportedMethodName.Substring(2) : unsupportedMethodName;
+
+                    // Divide the name into the fully-qualified name portion and the signature portion.
+                    string nameWithoutSignature;
+                    string signature;
+                    int leftParenIndex = strippedMethodName.IndexOf('(');
+                    if (leftParenIndex > 0)
+                    {
+                        nameWithoutSignature = strippedMethodName.Substring(0, leftParenIndex);
+                        signature = strippedMethodName.Substring(leftParenIndex + 1, strippedMethodName.Length - (leftParenIndex + 2));
+                    }
+                    else
+                    {
+                        nameWithoutSignature = strippedMethodName;
+                        signature = "";
+                    }
+
+                    // Divide the fully-qualified name portion into a fully-qualified type name and the unqualified method name.
+                    int lastDotIndex = nameWithoutSignature.LastIndexOf('.');
+                    string typeName = nameWithoutSignature.Substring(0, lastDotIndex);
+                    string methodName = nameWithoutSignature.Substring(lastDotIndex + 1, nameWithoutSignature.Length - (lastDotIndex + 1));
+
+                    // Split the signature into an array of parameter type names.
+                    string[] parameterTypeNames = signature == "" ? s_emptyStringArray :  signature.Split(',');
+
+                    INamedTypeSymbol type = context.Compilation.GetTypeByMetadataName(typeName);
+                    if (type != null)
+                    {
+                        // The qualified type names binds to a type.
+
+                        foreach (ISymbol member in type.GetMembers(methodName))
+                        {
+                            if (member.Kind == SymbolKind.Method)
+                            {
+                                // There is at least one method of the type with a matching name.
+
+                                IMethodSymbol method = (IMethodSymbol)member;
+                                bool methodMatches = false;
+                                if (method.Parameters.Length == parameterTypeNames.Length)
+                                {
+                                    // The number of parameters match.
+
+                                    methodMatches = true;
+                                    for (int parameterIndex = 0; parameterIndex < parameterTypeNames.Length; parameterIndex++)
+                                    {
+                                        ITypeSymbol parameterType = method.Parameters[parameterIndex].Type;
+                                        string parameterTypeName = parameterTypeNames[parameterIndex];
+                                        while (parameterTypeName.LastIndexOf('[') > 0)
+                                        {
+                                            // The parameter type name specifies an array type. Strip off the brackets.
+                                            // The list of unsupported members does not include any parameter types that are multidimensional arrays,
+                                            // so don't bother looking for them.
+                                            parameterTypeName = parameterTypeName.Substring(0, parameterTypeName.LastIndexOf('['));
+
+                                            // Chase through an array type to its element type. 
+                                            if (parameterType.TypeKind == TypeKind.Array)
+                                            {
+                                                parameterType = ((IArrayTypeSymbol)parameterType).ElementType;
+                                            }
+                                            else
+                                            {
+                                                methodMatches = false;
+                                                break;
+                                            }
+                                        }
+
+                                        // Bind the type name given in the signature.
+                                        INamedTypeSymbol specifiedType = context.Compilation.GetTypeByMetadataName(parameterTypeName);
+                                        if (specifiedType == null)
+                                        {
+                                            // Binding has failed. Check for some bogus type names that appear in the document.
+                                            switch (parameterTypeName)
+                                            {
+                                                case "bool":
+                                                    specifiedType = context.Compilation.GetSpecialType(SpecialType.System_Boolean);
+                                                    break;
+                                            }
+                                        }
+
+                                        if (specifiedType != null && parameterType.Equals(specifiedType))
+                                        {
+                                            // The specified parameter type matches the method's parameter type.
+                                            continue;
+                                        }
+
+                                        methodMatches = false;
+                                        break;
+                                    }
+                                }
+
+                                if (methodMatches)
+                                {
+                                    unsupportedMethods.Add(method);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 HashSet<System.Tuple<string, string>> unsupportedContracts = gatekeeperInfo.UnsupportedContracts;
 
-                context.RegisterSyntaxNodeAction((nodeContext) => { AnalyzeForUnsupportedType(nodeContext, (TypeSyntax)nodeContext.Node, unsupportedTypes); }, SyntaxKind.IdentifierName);
+                context.RegisterSyntaxNodeAction((nodeContext) => { AnalyzeForUnsupportedTypeOrMethod(nodeContext, unsupportedTypes, unsupportedMethods); }, SyntaxKind.IdentifierName);
             }
             catch (System.Exception)
             {
             }
         }
 
-        // Referring to one of a set of disallowed types is prohibited.
-        private void AnalyzeForUnsupportedType(SyntaxNodeAnalysisContext context, TypeSyntax typeReference, HashSet<INamedTypeSymbol> unsupportedTypes)
+        // Referring to one of a set of disallowed types or methods is prohibited.
+        private void AnalyzeForUnsupportedTypeOrMethod(SyntaxNodeAnalysisContext context, HashSet<INamedTypeSymbol> unsupportedTypes, HashSet<IMethodSymbol> unsupportedMethods)
         {
-            INamedTypeSymbol type = context.SemanticModel.GetSymbolInfo(typeReference).Symbol as INamedTypeSymbol;
+            ISymbol symbol = context.SemanticModel.GetSymbolInfo(context.Node).Symbol;
+
+            INamedTypeSymbol type = symbol as INamedTypeSymbol;
             if (type != null && unsupportedTypes.Contains(type))
             {
-                context.ReportDiagnostic(Diagnostic.Create(UnsupportedTypeDescriptor, typeReference.GetLocation(), type.ToDisplayString()));
+                context.ReportDiagnostic(Diagnostic.Create(UnsupportedTypeDescriptor, context.Node.GetLocation(), type.ToDisplayString()));
+                return;
+            }
+
+            IPropertySymbol property = symbol as IPropertySymbol;
+            if (property != null)
+            {
+                // Attempt to determine from context whether the get method or the set method applies.
+                // Is there a way to determine this from the SemanticModel?
+
+                SyntaxNode child = context.Node;
+                SyntaxNode parent = child.Parent;
+                
+                while (parent.Kind() == SyntaxKind.SimpleMemberAccessExpression)
+                {
+                    child = parent;
+                    parent = parent.Parent;
+                }
+                
+                if (parent.Kind() == SyntaxKind.SimpleAssignmentExpression && ((AssignmentExpressionSyntax)parent).Left == child)
+                {
+                    symbol = property.SetMethod;
+                }
+                else
+                {
+                    symbol = property.GetMethod;
+                }
+            }
+
+            IMethodSymbol method = symbol as IMethodSymbol;
+            if (method != null && unsupportedMethods.Contains(method))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(UnsupportedMethodDescriptor, context.Node.GetLocation(), method.ToDisplayString()));
             }
         }
 
@@ -685,6 +818,8 @@ namespace Roslyn.Diagnostics.Analyzers.CSharp.Reliability
                 type = type.BaseType;
             }
         }
+
+        private static readonly string[] s_emptyStringArray = new string[] { };
 
         private static readonly LocalizableString s_localizableArrayPointerElementMessageAndTitle = new LocalizableResourceString(nameof(RoslynDiagnosticsResources.NetNativeArrayPointerElementMessage), RoslynDiagnosticsResources.ResourceManager, typeof(RoslynDiagnosticsResources));
         public static readonly DiagnosticDescriptor ArrayPointerElementDescriptor = new DiagnosticDescriptor(
