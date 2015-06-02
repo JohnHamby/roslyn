@@ -421,6 +421,15 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to .Net Native does not support type &apos;{0}&apos; in the public surface of a Windows Runtime Metadata assembly..
+        /// </summary>
+        internal static string NetNativeUnsupportedWinMDTypeMessage {
+            get {
+                return ResourceManager.GetString("NetNativeUnsupportedWinMDTypeMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Override Object.Equals(object) when implementing IEquatable&lt;T&gt; .
         /// </summary>
         internal static string OverrideObjectEqualsDescription {

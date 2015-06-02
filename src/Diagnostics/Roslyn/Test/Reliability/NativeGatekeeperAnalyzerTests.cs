@@ -556,5 +556,68 @@ class Test
                 GetCSharpResultAt(14, 12, NativeGatekeeperAnalyzer.UnsupportedMethodDescriptor, "System.IO.Stream.BeginWrite(byte[], int, int, System.AsyncCallback, object)"),
                 GetCSharpResultAt(15, 12, NativeGatekeeperAnalyzer.UnsupportedMethodDescriptor, "System.Threading.Thread.CurrentCulture.set"));
         }
+
+        [Fact]
+        public void UnsupportedWinMDTypes()
+        {
+            var code = @"
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
+
+class Hides
+{
+    public System.IntPtr Fred { get; }
+    public System.IntPtr Barney (System.UIntPtr p) { return p[0]; }
+    public void Wilma (System.IntPtr p) { }
+    internal void Betty (System.UIntPtr p) {}
+
+    public class Hidden
+    {
+        public System.IntPtr Fred { get; }
+        public System.IntPtr Barney (System.UIntPtr[] p) { return p[0]; }
+        public void Wilma (System.IntPtr p) { }
+        internal void Betty (System.UIntPtr p) {}
+    }
+}
+
+public class Exposed
+{
+    public System.IntPtr Fred { get; }
+    protected internal System.IntPtr Barney (System.UIntPtr[] p) { return p[0]; }
+    protected void Wilma (System.IntPtr p) { }
+    internal void Betty (System.UIntPtr p) {}
+    private void Pebbles (System.IntPtr p) {}
+
+    public class InnerExposed
+    {
+        public System.IntPtr Fred { get; }
+        public System.IntPtr Barney (System.UIntPtr p) { return p; }
+        public void Wilma (System.IntPtr p) { }
+        internal void Betty (System.UIntPtr p) {}
+    }
+
+    class NotExposed
+    {
+        public System.IntPtr Fred { get; }
+        public System.IntPtr Barney (System.UIntPtr[] p) { return p[0]; }
+        public void Wilma (System.IntPtr p) { }
+        internal void Betty (System.UIntPtr p) {}
+    }
+}
+";
+#if false   // Need to figure out how to turn on an output kind of WinMD for this test.
+            VerifyCSharp(
+                code,
+                GetCSharpResultAt(24, 26, NativeGatekeeperAnalyzer.UnsupportedWinMDDescriptor, "System.IntPtr"),
+                GetCSharpResultAt(25, 38, NativeGatekeeperAnalyzer.UnsupportedWinMDDescriptor, "System.IntPtr"),
+                GetCSharpResultAt(25, 63, NativeGatekeeperAnalyzer.UnsupportedWinMDDescriptor, "System.UIntPtr[]"),
+                GetCSharpResultAt(26, 41, NativeGatekeeperAnalyzer.UnsupportedWinMDDescriptor, "System.IntPtr"),
+                GetCSharpResultAt(32, 30, NativeGatekeeperAnalyzer.UnsupportedWinMDDescriptor, "System.IntPtr"),
+                GetCSharpResultAt(33, 30, NativeGatekeeperAnalyzer.UnsupportedWinMDDescriptor, "System.IntPtr"),
+                GetCSharpResultAt(33, 53, NativeGatekeeperAnalyzer.UnsupportedWinMDDescriptor, "System.UIntPtr"),
+                GetCSharpResultAt(34, 42, NativeGatekeeperAnalyzer.UnsupportedWinMDDescriptor, "System.IntPtr"));
+#endif
+        }
     }
 }

@@ -306,4 +306,7 @@
   <data name="NetNativeUnsupportedTypeMessage" xml:space="preserve">
     <value>.Net Native does not support type '{0}'.</value>
   </data>
+  <data name="NetNativeUnsupportedWinMDTypeMessage" xml:space="preserve">
+    <value>.Net Native does not support type '{0}' in the public surface of a Windows Runtime Metadata assembly.</value>
+  </data>
 </root>

@@ -42,5 +42,6 @@ namespace Roslyn.Diagnostics.Analyzers
         public const string NetNativeEmptyInfiniteLoopRuleId = "RS1010";
         public const string NetNativeUnsupportedTypeRuleId = "RS1011";
         public const string NetNativeUnsupportedMethodRuleId = "RS1012";
+        public const string NetNativeUnsupportedWinMDTypeRuleId = "RS1013";
     }
 }
