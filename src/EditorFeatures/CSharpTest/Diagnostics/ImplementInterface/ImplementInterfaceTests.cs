@@ -2686,5 +2686,13 @@ public class Holder
     }
 }");
         }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsImplementInterface)]
+        public void TestImplementGenericInterfaceThroughStaticMember()
+        {
+            Test(
+@"interface I<T> { void M (T p ) ; } class C : [|I<object>|] { static Through<object> field = new Through<object>(); } class Through<T> : I<T> { public void M(T p) {} }",
+@"using System; interface I { void M (T p ) ; } class C : I<object> { static Through<object> field = new Through<object>(); public void M (object p ) { field.M(p); } } class Through<T> : I<T> { public void M(T p) {} }");
+        }
     }
 }
