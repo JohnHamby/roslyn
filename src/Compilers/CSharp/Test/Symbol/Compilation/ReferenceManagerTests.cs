@@ -13,6 +13,7 @@ using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Roslyn.Utilities;
 using Xunit;
+using System.Reflection.PortableExecutable;
 
 namespace Microsoft.CodeAnalysis.CSharp.UnitTests
 {
@@ -21,6 +22,34 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
         private static readonly CSharpCompilationOptions s_signedDll = TestOptions.ReleaseDll.
             WithCryptoKeyFile(SigningTestHelpers.KeyPairFile).
             WithStrongNameProvider(new SigningTestHelpers.VirtualizedStrongNameProvider(ImmutableArray.Create<string>()));
+
+        [ClrOnlyFact(ClrOnlyReason.Signing)]
+        public void WinRtCompilationReferences()
+        {
+            var ifaceDef = CreateCompilationWithMscorlib(
+@"
+public interface ITest
+{
+}", options: TestOptions.DebugWinMD, assemblyName: "ITest");
+
+            ifaceDef.VerifyDiagnostics();
+            var ifaceImageRef = ifaceDef.EmitToImageReference();
+
+            var wimpl = AssemblyMetadata.CreateFromImage(TestResources.WinRt.WImpl).GetReference(display: "WImpl");
+
+            var implDef2 = CreateCompilationWithMscorlib(
+@"
+public class C
+{
+    public static void Main()
+    {
+        ITest test = new WImpl();
+    }
+}", references: new MetadataReference[] { ifaceDef.ToMetadataReference(), wimpl },
+    options: TestOptions.DebugExe);
+
+            implDef2.VerifyDiagnostics();
+        }
 
         [ClrOnlyFact(ClrOnlyReason.Signing)]
         public void VersionUnification_SymbolUsed()
@@ -353,7 +382,7 @@ public class OKImpl : I
                 // warning CS1701: Assuming assembly reference 'Lib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=ce65828c82a341f2' used by 'X' matches identity 'Lib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=ce65828c82a341f2' of 'Lib', you may need to supply runtime policy
                 Diagnostic(ErrorCode.WRN_UnifyReferenceMajMin).WithArguments("Lib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=ce65828c82a341f2", "X", "Lib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=ce65828c82a341f2", "Lib"));
 
-            CompileAndVerify(main, emitters: TestEmitters.CCI, validator: (assembly, _) =>
+            CompileAndVerify(main, validator: (assembly) =>
             {
                 var reader = assembly.GetMetadataReader();
                 List<string> refs = new List<string>();
@@ -1730,7 +1759,7 @@ public class C : I { }
             var refLib = ((MetadataImageReference)lib.EmitToImageReference()).WithEmbedInteropTypes(true);
             var main = CreateCompilationWithMscorlib(mainSource, new[] { refLib }, assemblyName: "main");
 
-            CompileAndVerify(main, validator: (pe, _) =>
+            CompileAndVerify(main, validator: (pe) =>
             {
                 var reader = pe.GetMetadataReader();
 
@@ -2119,6 +2148,32 @@ public class Source
             c.VerifyDiagnostics(
                 // error CS0009: Metadata file 'NativeApp.exe' could not be opened -- PE image doesn't contain managed metadata.
                 Diagnostic(ErrorCode.FTL_MetadataCantOpenFile).WithArguments(@"NativeApp.exe", CodeAnalysisResources.PEImageDoesntContainManagedMetadata));
+        }
+
+        [WorkItem(2988, "https://github.com/dotnet/roslyn/issues/2988")]
+        [ClrOnlyFact(ClrOnlyReason.Signing)]
+        public void EmptyReference1()
+        {
+            var source = "class C { public static void Main() { } }";
+
+            var c = CreateCompilationWithMscorlib(source, new[] { AssemblyMetadata.CreateFromImage(new byte[0]).GetReference(display: "Empty.dll") });
+            c.VerifyDiagnostics(
+                Diagnostic(ErrorCode.FTL_MetadataCantOpenFile).WithArguments(@"Empty.dll", CodeAnalysisResources.PEImageDoesntContainManagedMetadata));
+        }
+
+        [WorkItem(2992, "https://github.com/dotnet/roslyn/issues/2992")]
+        [ClrOnlyFact(ClrOnlyReason.Signing)]
+        public void MetadataDisposed()
+        {
+            var md = AssemblyMetadata.CreateFromImage(TestResources.NetFX.Minimal.mincorlib);
+            var compilation = CSharpCompilation.Create("test", references: new[] { md.GetReference() });
+
+            // Use the Compilation once to force lazy initialization of the underlying MetadataReader
+            compilation.GetTypeByMetadataName("System.Int32").GetMembers();
+
+            md.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => compilation.GetTypeByMetadataName("System.Int64").GetMembers());
         }
 
         [WorkItem(43)]

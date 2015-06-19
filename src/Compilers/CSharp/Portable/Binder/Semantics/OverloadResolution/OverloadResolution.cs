@@ -1189,6 +1189,9 @@ namespace Microsoft.CodeAnalysis.CSharp
 
                 if (!considerRefKinds || Conversions.ClassifyImplicitConversion(type1, type2, ref useSiteDiagnostics).Kind != ConversionKind.Identity)
                 {
+                    // If considerRefKinds is false, conversion between parameter types isn't classified by the if condition.
+                    // This assert is here to verify the assumption that the conversion is never an identity in that case and
+                    // we can skip classification as an optimization.
                     Debug.Assert(considerRefKinds || Conversions.ClassifyImplicitConversion(type1, type2, ref useSiteDiagnostics).Kind != ConversionKind.Identity);
                     allSame = false;
                 }
@@ -2065,9 +2068,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                         {
                             bool ignore;
                             // Since we are dealing with variance delegate conversion and delegates have identical parameter
-                            // lists, return types must be implicitly convertable in the same direction.
+                            // lists, return types must be implicitly convertible in the same direction.
                             // Or we might be dealing with error return types and we may have one error delegate matching exactly
-                            // while another not being an error and not convertable.
+                            // while another not being an error and not convertible.
                             Debug.Assert(
                                 r1.IsErrorType() ||
                                 r2.IsErrorType() ||

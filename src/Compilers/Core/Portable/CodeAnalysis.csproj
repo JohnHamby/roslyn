@@ -270,7 +270,6 @@
     <Compile Include="Emit\NoPia\VtblGap.cs" />
     <Compile Include="Emit\CommonPEModuleBuilder.cs" />
     <Compile Include="Emit\SemanticEdit.cs" />
-    <Compile Include="Emit\TypeExport.cs" />
     <Compile Include="EnumConstantHelper.cs" />
     <Compile Include="InternalUtilities\ArrayExtensions.cs" />
     <Compile Include="InternalUtilities\BitArithmeticUtilities.cs" />
@@ -712,7 +711,6 @@
       <HintPath>..\..\..\..\packages\System.Reflection.Metadata.$(SystemReflectionMetadataVersion)\lib\portable-net45+win8\System.Reflection.Metadata.dll</HintPath>
     </Reference>
   </ItemGroup>
-<!-- Support for deterministic PDB (workitem 926)
   <ItemGroup>
     <Content Include="..\..\..\..\packages\Microsoft.DiaSymReader.Native.1.0.0-rc2\lib\any~windows\x86\Microsoft.DiaSymReader.Native.x86.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -721,7 +719,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
--->
   <Import Project="..\AnalyzerDriver\AnalyzerDriver.projitems" Label="Shared" />
   <Import Project="..\SharedCollections\SharedCollections.projitems" Label="Shared" />
   <ImportGroup Label="Targets">

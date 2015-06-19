@@ -324,7 +324,7 @@ class C
                 Diagnostic(ErrorCode.WRN_UnreferencedEvent, "d2").WithArguments("A.d2")
             });
 
-            var verifer = CompileAndVerifyOnWin8Only(
+            var verifier = CompileAndVerifyOnWin8Only(
                 src,
                 additionalRefs: new[] {
                     MscorlibRef_v4_0_30316_17626,
@@ -332,9 +332,8 @@ class C
                     CSharpRef,
                     _eventLibRef,
                     dynamicCommonRef
-                },
-                emitOptions: TestEmitters.RefEmitBug);
-            verifer.VerifyIL("C.Main",
+                });
+            verifier.VerifyIL("C.Main",
 @"
 {
   // Code size     6300 (0x189c)
@@ -2358,7 +2357,6 @@ public partial class A : I
                     SystemCoreRef_v4_0_30319_17929,
                     _eventLibRef,
                 },
-                emitOptions: TestEmitters.RefEmitBug,
                 verify: OSVersion.IsWin8);
 
             verifier.VerifyDiagnostics(
@@ -2487,7 +2485,7 @@ public class abcdef{
     }
 } ";
 
-            var cv = CompileAndVerifyOnWin8Only(text, emitOptions: TestEmitters.RefEmitBug);
+            var cv = CompileAndVerifyOnWin8Only(text);
 
             cv.VerifyIL("abcdef.foo()", @"
 {
@@ -2547,7 +2545,7 @@ public class abcdef{
                                 }
                             } ";
 
-            var cv = CompileAndVerifyOnWin8Only(text, emitOptions: TestEmitters.RefEmitBug);
+            var cv = CompileAndVerifyOnWin8Only(text);
 
             var ExpectedIl =
 @"
@@ -2611,7 +2609,7 @@ public class abcdef{
     }
 }";
 
-            var cv = CompileAndVerifyOnWin8Only(text, emitOptions: TestEmitters.RefEmitBug);
+            var cv = CompileAndVerifyOnWin8Only(text);
 
             cv.VerifyIL("abcdef.foo()", @"
 {

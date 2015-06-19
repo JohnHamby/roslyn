@@ -26,6 +26,7 @@ namespace Microsoft.CodeAnalysis.Emit
         internal abstract void CompilationFinished();
         internal abstract ImmutableDictionary<Cci.ITypeDefinition, ImmutableArray<Cci.ITypeDefinitionMember>> GetSynthesizedMembers();
         internal abstract CommonEmbeddedTypesManager CommonEmbeddedTypesManagerOpt { get; }
+        internal abstract Cci.ITypeReference EncTranslateType(ITypeSymbol type, DiagnosticBag diagnostics);
     }
 
     /// <summary>
@@ -50,15 +51,7 @@ namespace Microsoft.CodeAnalysis.Emit
         private readonly EmitOptions _emitOptions;
         private readonly ModulePropertiesForSerialization _serializationProperties;
         private readonly ConcurrentCache<ValueTuple<string, string>, string> _normalizedPathsCache = new ConcurrentCache<ValueTuple<string, string>, string>(16);
-
-        /// <summary>
-        /// Used to translate assembly symbols to assembly references in scenarios when the physical assemblies 
-        /// being emitted don't correspond to the assembly symbols 1:1. This happens, for example, in interactive sessions where
-        /// multiple code submissions might be compiled into a single dynamic assembly or into multiple assemblies 
-        /// depending on properties of the code being emitted. If null we map assembly symbol exactly to its assembly name.
-        /// </summary>
-        protected readonly Func<TAssemblySymbol, AssemblyIdentity> assemblySymbolMapper;
-
+        
         private readonly TokenMap<Cci.IReference> _referencesInILMap = new TokenMap<Cci.IReference>();
         private readonly StringTokenMap _stringsInILMap = new StringTokenMap();
         private readonly ConcurrentDictionary<TMethodSymbol, Cci.IMethodBody> _methodBodyMap =
@@ -97,7 +90,6 @@ namespace Microsoft.CodeAnalysis.Emit
             ModulePropertiesForSerialization serializationProperties,
             IEnumerable<ResourceDescription> manifestResources,
             OutputKind outputKind,
-            Func<TAssemblySymbol, AssemblyIdentity> assemblySymbolMapper,
             EmitOptions emitOptions,
             TModuleCompilationState compilationState)
         {
@@ -109,7 +101,6 @@ namespace Microsoft.CodeAnalysis.Emit
             _serializationProperties = serializationProperties;
             this.ManifestResources = manifestResources;
             _outputKind = outputKind;
-            this.assemblySymbolMapper = assemblySymbolMapper;
             _emitOptions = emitOptions;
             this.CompilationState = compilationState;
 
@@ -147,6 +138,16 @@ namespace Microsoft.CodeAnalysis.Emit
 
         internal abstract Cci.INamedTypeReference GetSystemType(TSyntaxNode syntaxOpt, DiagnosticBag diagnostics);
         internal abstract Cci.INamedTypeReference GetSpecialType(SpecialType specialType, TSyntaxNode syntaxNodeOpt, DiagnosticBag diagnostics);
+
+        internal sealed override Cci.ITypeReference EncTranslateType(ITypeSymbol type, DiagnosticBag diagnostics)
+        {
+            return EncTranslateLocalVariableType((TTypeSymbol)type, diagnostics);
+        }
+
+        internal virtual Cci.ITypeReference EncTranslateLocalVariableType(TTypeSymbol type, DiagnosticBag diagnostics)
+        {
+            return Translate(type, null, diagnostics);
+        }
 
         protected bool HaveDeterminedTopLevelTypes
         {
@@ -682,7 +683,7 @@ namespace Microsoft.CodeAnalysis.Emit
             return GetTopLevelTypes(context);
         }
 
-        public abstract IEnumerable<Cci.ITypeExport> GetExportedTypes(EmitContext context);
+        public abstract IEnumerable<Cci.ITypeReference> GetExportedTypes(EmitContext context);
 
         Cci.ITypeReference Cci.IModule.GetPlatformType(Cci.PlatformType platformType, EmitContext context)
         {

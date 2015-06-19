@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Immutable;
@@ -692,7 +692,7 @@ public class Derived2 : Derived
             Assert.False(derived2Indexer2.Parameters.Single().IsParams, "Derived2.Indexer2.IsParams should be false");
         }
 
-        [Fact]
+        [ClrOnlyFact]
         [WorkItem(819774, "DevDiv")]
         public void Repro819774()
         {
@@ -733,7 +733,7 @@ class Test
                 options: TestOptions.ReleaseExe.WithMetadataImportOptions(MetadataImportOptions.All),
                 references: new[] { CSharpRef, SystemCoreRef });
 
-            CompileAndVerify(comp, emitters: TestEmitters.RefEmitBug, expectedOutput: "Bug813305.M",
+            CompileAndVerify(comp, expectedOutput: "Bug813305.M",
                 symbolValidator: m =>
                 {
                     var Bug813305 = m.GlobalNamespace.GetTypeMember("Bug813305");

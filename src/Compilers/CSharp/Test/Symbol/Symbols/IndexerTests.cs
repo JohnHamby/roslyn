@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -21,7 +21,7 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests.Symbols
 {
     public class IndexerTests : CSharpTestBase
     {
-        [Fact]
+        [ClrOnlyFact]
         public void Indexers()
         {
             var source =
@@ -61,13 +61,12 @@ struct S
 
             CompileAndVerify(
                 source: source,
-                emitters: TestEmitters.CCI,
                 sourceSymbolValidator: validator,
                 symbolValidator: validator,
                 options: TestOptions.ReleaseDll.WithMetadataImportOptions(MetadataImportOptions.Internal));
         }
 
-        [Fact]
+        [ClrOnlyFact]
         public void InterfaceImplementations()
         {
             var source =
@@ -428,8 +427,7 @@ class C : I1, I2
 
                 Assert.True(interface1Getter == interface1GetterImpl ^ interface1Getter == interface2GetterImpl);
                 Assert.True(interface2Getter == interface1GetterImpl ^ interface2Getter == interface2GetterImpl);
-            },
-            emitOptions: TestEmitters.RefEmitBug);
+            });
         }
 
         /// <summary>
@@ -489,8 +487,7 @@ class C : I1
 
                 Assert.Equal(interfaceIndexers[0].GetMethod, synthesizedExplicitImplementation.ExplicitInterfaceImplementations.Single());
                 Assert.Equal(interfaceIndexers[1].GetMethod, synthesizedExplicitImplementation.ExplicitInterfaceImplementations.Single());
-            },
-            emitOptions: TestEmitters.RefEmitBug);
+            });
         }
 
         /// <summary>
@@ -669,8 +666,7 @@ class Derived : Base
                 Assert.NotEqual(baseIndexer.MetadataName, derivedIndexer.MetadataName);
 
                 Assert.Equal(baseIndexer, derivedIndexer.OverriddenProperty);
-            },
-            emitOptions: TestEmitters.RefEmitBug);
+            });
         }
 
         [ClrOnlyFact(ClrOnlyReason.Ilasm)]
@@ -1095,7 +1091,7 @@ public class C : B
                 Diagnostic(ErrorCode.ERR_CantOverrideNonVirtual, "this").WithArguments("C.this[int]", "B.this[int]"));
         }
 
-        [Fact]
+        [ClrOnlyFact]
         public void CanBeReferencedByName()
         {
             var source = @"
@@ -1166,7 +1162,7 @@ class C : I
                 Assert.False(classIndexer.CanBeReferencedByName);
             };
 
-            CompileAndVerify(source, emitters: TestEmitters.RefEmitBug, sourceSymbolValidator: validator(true), symbolValidator: validator(false));
+            CompileAndVerify(source, sourceSymbolValidator: validator(true), symbolValidator: validator(false));
         }
 
         [Fact]
@@ -1189,7 +1185,7 @@ class C : I
         /// This is unfortunate, but less so that having something declared with an IndexerDeclarationSyntax
         /// return false for IsIndexer.
         /// </summary>
-        [Fact]
+        [ClrOnlyFact]
         public void ExplicitInterfaceImplementationIndexers()
         {
             var text = @"
@@ -1228,7 +1224,7 @@ public class C : I
                 Assert.False(classCIndexer.IsIndexer()); //not the default member of C
             };
 
-            CompileAndVerify(text, emitters: TestEmitters.RefEmitBug, sourceSymbolValidator: sourceValidator, symbolValidator: metadataValidator);
+            CompileAndVerify(text, sourceSymbolValidator: sourceValidator, symbolValidator: metadataValidator);
         }
 
         [Fact]
@@ -2479,7 +2475,7 @@ class Test
         }
 
         [WorkItem(543261, "DevDiv")]
-        [Fact]
+        [ClrOnlyFact]
         public void OverrideOneAccessorOnly()
         {
             var source =

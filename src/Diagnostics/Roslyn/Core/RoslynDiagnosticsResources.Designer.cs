@@ -250,6 +250,33 @@ namespace Roslyn.Diagnostics.Analyzers {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to When a base class is noninheritable because its constructor is internal, a derived class should not make it inheritable by having a public or protected constructor..
+        /// </summary>
+        internal static string ExposedNoninstantiableTypeDescription {
+            get {
+                return ResourceManager.GetString("ExposedNoninstantiableTypeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Constructor makes its noninheritable base class inheritable, thereby exposing its protected members..
+        /// </summary>
+        internal static string ExposedNoninstantiableTypeMessage {
+            get {
+                return ResourceManager.GetString("ExposedNoninstantiableTypeMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Constructor make noninheritable base class inheritable.
+        /// </summary>
+        internal static string ExposedNoninstantiableTypeTitle {
+            get {
+                return ResourceManager.GetString("ExposedNoninstantiableTypeTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Implement IEquatable&lt;T&gt; when overriding Object.Equals.
         /// </summary>
         internal static string ImplementIEquatableDescription {

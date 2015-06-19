@@ -20,6 +20,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
     internal sealed class AnalyzerDependencyCheckingService
     {
         private static readonly object s_dependencyConflictErrorId = new object();
+        private static readonly IIgnorableAssemblyList s_systemPrefixList = new IgnorableAssemblyNamePrefixList("System");
 
         private readonly VisualStudioWorkspaceImpl _workspace;
         private readonly HostDiagnosticUpdateSource _updateSource;
@@ -192,9 +193,11 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
 
             _task = _task.SafeContinueWith(_ =>
             {
-
                 IEnumerable<AssemblyIdentity> loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies().Select(assembly => AssemblyIdentity.FromAssemblyDefinition(assembly));
-                return new AnalyzerDependencyChecker(currentAnalyzerPaths, loadedAssemblies, _bindingRedirectionService).Run(_cancellationTokenSource.Token);
+                IgnorableAssemblyIdentityList loadedAssembliesList = new IgnorableAssemblyIdentityList(loadedAssemblies);
+                IIgnorableAssemblyList[] ignorableAssemblyLists = new[] { s_systemPrefixList, loadedAssembliesList };
+
+                return new AnalyzerDependencyChecker(currentAnalyzerPaths, ignorableAssemblyLists, _bindingRedirectionService).Run(_cancellationTokenSource.Token);
             },
             TaskScheduler.Default);
 

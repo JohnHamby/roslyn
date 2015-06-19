@@ -456,6 +456,34 @@ namespace Roslyn.Test.Utilities
             }
         }
 
+        private static MetadataReference s_systemThreadingFacadeRef;
+        public static MetadataReference SystemThreadingFacadeRef
+        {
+            get
+            {
+                if (s_systemThreadingFacadeRef == null)
+                {
+                    s_systemThreadingFacadeRef = AssemblyMetadata.CreateFromImage(ProprietaryTestResources.NetFX.ReferenceAssemblies_V45_Facades.System_Threading).GetReference(display: "System.Threading.dll");
+                }
+
+                return s_systemThreadingFacadeRef;
+            }
+        }
+
+        private static MetadataReference s_systemThreadingTasksFacadeRef;
+        public static MetadataReference SystemThreadingTaskFacadeRef
+        {
+            get
+            {
+                if (s_systemThreadingTasksFacadeRef == null)
+                {
+                    s_systemThreadingTasksFacadeRef = AssemblyMetadata.CreateFromImage(ProprietaryTestResources.NetFX.ReferenceAssemblies_V45_Facades.System_Threading_Tasks).GetReference(display: "System.Threading.Tasks.dll");
+                }
+
+                return s_systemThreadingTasksFacadeRef;
+            }
+        }
+
         private static MetadataReference s_mscorlibPP7Ref;
         public static MetadataReference MscorlibPP7Ref
         {
@@ -601,7 +629,7 @@ namespace Roslyn.Test.Utilities
         /// <summary>
         /// Used to validate metadata blobs emitted for MarshalAs.
         /// </summary>
-        internal static void MarshalAsMetadataValidator(PEAssembly assembly, Func<string, PEAssembly, TestEmitters, byte[]> getExpectedBlob, TestEmitters emitters, bool isField = true)
+        internal static void MarshalAsMetadataValidator(PEAssembly assembly, Func<string, PEAssembly, byte[]> getExpectedBlob, bool isField = true)
         {
             var metadataReader = assembly.GetMetadataReader();
 
@@ -621,7 +649,7 @@ namespace Roslyn.Test.Utilities
                     var field = metadataReader.GetFieldDefinition(fieldDef);
                     string fieldName = metadataReader.GetString(field.Name);
 
-                    byte[] expectedBlob = getExpectedBlob(fieldName, assembly, emitters);
+                    byte[] expectedBlob = getExpectedBlob(fieldName, assembly);
                     if (expectedBlob != null)
                     {
                         BlobHandle descriptor = metadataReader.GetFieldDefinition(fieldDef).GetMarshallingDescriptor();
@@ -651,7 +679,7 @@ namespace Roslyn.Test.Utilities
                         var paramRow = metadataReader.GetParameter(paramHandle);
                         string paramName = metadataReader.GetString(paramRow.Name);
 
-                        byte[] expectedBlob = getExpectedBlob(memberName + ":" + paramName, assembly, emitters);
+                        byte[] expectedBlob = getExpectedBlob(memberName + ":" + paramName, assembly);
                         if (expectedBlob != null)
                         {
                             Assert.NotEqual(0, (int)(paramRow.Attributes & ParameterAttributes.HasFieldMarshal));

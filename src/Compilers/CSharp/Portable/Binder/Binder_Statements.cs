@@ -346,7 +346,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             // result.Symbols can be empty in some malformed code, e.g. when a labeled statement is used an embedded statement in an if or foreach statement    
             // In this case we create new label symbol on the fly, and an error is reported by parser
-            var symbol = result.Symbols.Count != 0 ?
+            var symbol = result.Symbols.Count > 0 && result.IsMultiViable ?
                 (LabelSymbol)result.Symbols.First() :
                 new SourceLabelSymbol((MethodSymbol)ContainingMemberOrLambda, node.Identifier);
 
@@ -1959,11 +1959,17 @@ namespace Microsoft.CodeAnalysis.CSharp
             return (object)sourceProperty != null &&
                     sourceProperty.IsAutoProperty &&
                     sourceProperty.ContainingType == fromMember.ContainingType &&
-                    ((MethodSymbol)fromMember).MethodKind == (propertyIsStatic ? MethodKind.StaticConstructor
-                                                                                : MethodKind.Constructor) &&
-                   (propertyIsStatic || receiver.Kind == BoundKind.ThisReference);
+                    IsConstructorOrField(fromMember, isStatic: propertyIsStatic) &&
+                    (propertyIsStatic || receiver.Kind == BoundKind.ThisReference);
         }
 
+        private static bool IsConstructorOrField(Symbol member, bool isStatic)
+        {
+            return  (member as MethodSymbol)?.MethodKind == (isStatic ?
+                                                                MethodKind.StaticConstructor :
+                                                                MethodKind.Constructor) ||
+                    (member as FieldSymbol)?.IsStatic == isStatic;
+        }
 
         /// <summary>
         /// SPEC: When a property or indexer declared in a struct-type is the target of an 
@@ -2837,7 +2843,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
             else if (arg != null)
             {
-                hasErrors = arg.HasAnyErrors;
+                hasErrors = arg.HasErrors || ((object)arg.Type != null && arg.Type.IsErrorType());
             }
             else
             {

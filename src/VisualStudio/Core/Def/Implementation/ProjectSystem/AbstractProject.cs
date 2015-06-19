@@ -87,6 +87,11 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
         /// </summary>
         private Guid _guid;
 
+        /// <summary>
+        /// string (Guid) of the _hierarchy project type
+        /// </summary>
+        private readonly string _projectType;
+
         // PERF: Create these event handlers once to be shared amongst all documents (the sender arg identifies which document and project)
         private static readonly EventHandler<bool> s_documentOpenedEventHandler = OnDocumentOpened;
         private static readonly EventHandler<bool> s_documentClosingEventHandler = OnDocumentClosing;
@@ -115,6 +120,9 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
 
             // get project id guid
             _guid = GetProjectIDGuid(hierarchy);
+
+            // get project type guid
+            _projectType = GetProjectType(hierarchy);
 
             var componentModel = (IComponentModel)serviceProvider.GetService(typeof(SComponentModel));
             _contentTypeRegistryService = componentModel.GetService<IContentTypeRegistryService>();
@@ -150,7 +158,24 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
             SetIsWebstite(hierarchy);
         }
 
-        private Guid GetProjectIDGuid(IVsHierarchy hierarchy)
+        private static string GetProjectType(IVsHierarchy hierarchy)
+        {
+            var aggregatableProject = hierarchy as IVsAggregatableProject;
+            if (aggregatableProject == null)
+            {
+                return string.Empty;
+            }
+
+            string projectType;
+            if (ErrorHandler.Succeeded(aggregatableProject.GetAggregateProjectTypeGuids(out projectType)))
+            {
+                return projectType;
+            }
+
+            return string.Empty;
+        }
+
+        private static Guid GetProjectIDGuid(IVsHierarchy hierarchy)
         {
             Guid guid;
             if (hierarchy.TryGetGuidProperty(__VSHPROPID.VSHPROPID_ProjectIDGuid, out guid))
@@ -220,6 +245,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
         public IVsHierarchy Hierarchy => _hierarchy;
 
         public Guid Guid => _guid;
+
+        public string ProjectType => _projectType;
 
         public Workspace Workspace => (Workspace)_visualStudioWorkspaceOpt ?? _miscellaneousFilesWorkspaceOpt;
 
@@ -386,7 +413,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
             // dev11 sometimes gives us output path w/o extension, so removing extension becomes problematic
             if (outputPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
                 outputPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                outputPath.EndsWith(".netmodule", StringComparison.OrdinalIgnoreCase))
+                outputPath.EndsWith(".netmodule", StringComparison.OrdinalIgnoreCase) ||
+                outputPath.EndsWith(".winmdobj", StringComparison.OrdinalIgnoreCase))
             {
                 return Path.GetFileNameWithoutExtension(outputPath);
             }
@@ -872,7 +900,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
             }
         }
 
-        internal void UndoProjectReferenceConversionForDissappearingOutputPath(string binPath)
+        internal void UndoProjectReferenceConversionForDisappearingOutputPath(string binPath)
         {
             ProjectReference projectReference;
             if (_metadataFileNameToConvertedProjectReference.TryGetValue(binPath, out projectReference))
