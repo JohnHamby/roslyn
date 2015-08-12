@@ -14,11 +14,23 @@ namespace Microsoft.CodeAnalysis.Diagnostics.EngineV2
     internal class DiagnosticIncrementalAnalyzer : BaseDiagnosticIncrementalAnalyzer
     {
         private readonly int _correlationId;
+        private Queue<Tuple<CancellationToken, Task<Task<ImmutableArray<DiagnosticData>>>>>[] _pendingAnalysisTasks;
+        private Task _analysisExecutionTask = null;
+        private CancellationTokenSource _analysisExecutionTaskCancellation;
+        private const int TaskPriorities = 3;
+        private int _executingAnalysisPriority = 0;
+        private object _lockObject = new object();
 
         public DiagnosticIncrementalAnalyzer(DiagnosticAnalyzerService owner, int correlationId, Workspace workspace, HostAnalyzerManager hostAnalyzerManager, AbstractHostDiagnosticUpdateSource hostDiagnosticUpdateSource)
             : base(owner, workspace, hostAnalyzerManager, hostDiagnosticUpdateSource)
         {
             _correlationId = correlationId;
+
+            _pendingAnalysisTasks = new Queue<Tuple<CancellationToken, Task<Task<ImmutableArray<DiagnosticData>>>>>[TaskPriorities];
+            for (int index = 0; index < TaskPriorities; index++)
+            {
+                _pendingAnalysisTasks[index] = new Queue<Tuple<CancellationToken, Task<Task<ImmutableArray<DiagnosticData>>>>>();
+            }
         }
 
         #region IIncrementalAnalyzer
@@ -153,17 +165,65 @@ namespace Microsoft.CodeAnalysis.Diagnostics.EngineV2
                 return ImmutableArray<DiagnosticData>.Empty;
             }
 
-            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            Func<CancellationToken, Task<ImmutableArray<DiagnosticData>>> act = async (cancel) =>
+            {
+                var compilation = await project.GetCompilationAsync(cancel).ConfigureAwait(false);
 
-            var analyzers = HostAnalyzerManager.CreateDiagnosticAnalyzers(project);
+                var analyzers = HostAnalyzerManager.CreateDiagnosticAnalyzers(project);
 
-            var compilationWithAnalyzer = compilation.WithAnalyzers(analyzers, project.AnalyzerOptions, cancellationToken);
+                var compilationWithAnalyzer = compilation.WithAnalyzers(analyzers, project.AnalyzerOptions, cancel);
+                
+                var dxs = GetDiagnosticData(project, await compilationWithAnalyzer.GetAnalyzerDiagnosticsAsync().ConfigureAwait(false)).ToImmutableArrayOrEmpty();
 
-            // REVIEW: this API is a bit strange. 
-            //         if getting diagnostic is cancelled, it has to create new compilation and do everything from scratch again?
-            var dxs = GetDiagnosticData(project, await compilationWithAnalyzer.GetAnalyzerDiagnosticsAsync().ConfigureAwait(false)).ToImmutableArrayOrEmpty();
+                return dxs;
+            };
 
-            return dxs;
+            var t = AddAnalysisTask(act, 0, cancellationToken);
+            return await (await t.ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
+        private Task<Task<ImmutableArray<DiagnosticData>>> AddAnalysisTask(Func<CancellationToken, Task<ImmutableArray<DiagnosticData>>> act, int priority, CancellationToken cancellationToken)
+        {
+            var t = new Task<Task<ImmutableArray<DiagnosticData>>>(act);
+            lock (_lockObject)
+            {
+                if (priority > _executingAnalysisPriority && _analysisExecutionTask != null)
+                {
+                    _analysisExecutionTaskCancellation.Cancel();
+                }
+
+                _pendingAnalysisTasks[priority].Enqueue(new Tuple<CancellationToken, Task<Task<ImmutableArray<DiagnosticData>>>>(cancellationToken, t));
+                if (_analysisExecutionTask == null || _analysisExecutionTask.IsCompleted || _analysisExecutionTask.IsCanceled)
+                {
+                    _analysisExecutionTask = Task.Run(async () =>
+                        {
+                            cancellationToken.
+                            try
+                            {
+                                for (int pendingPriority = TaskPriorities - 1; pendingPriority >= 0; pendingPriority--)
+                                {
+                                    var queue = _pendingAnalysisTasks[priority];
+                                    while (queue.Count > 0)
+                                    {
+                                        _executingAnalysisPriority = pendingPriority;
+                                        var ttt = queue.Peek().Item2;
+                                        ttt.Start();
+                                        var tt = await queue.Peek().Item2.ConfigureAwait(false);
+                                        var xx = await tt.ConfigureAwait(false);
+                                        queue.Dequeue();
+                                    }
+                                }
+                            }
+                            catch (OperationCanceledException cancelled)
+                            {
+
+                            }
+                        });
+                }
+
+            }
+
+            return t;
         }
 
         private IEnumerable<DiagnosticData> GetDiagnosticData(Project project, ImmutableArray<Diagnostic> diagnostics)
