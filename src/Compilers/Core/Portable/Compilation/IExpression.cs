@@ -942,6 +942,66 @@ namespace Microsoft.CodeAnalysis.Semantics
     }
 
     /// <summary>
+    /// Represents semantic characteristics of a particular conversion.
+    /// </summary>
+    /// <remarks>
+    /// This interface is reserved for implementation by its associated APIs. We reserve the right to
+    /// change it in the future.
+    /// </remarks>
+    public interface IConversion
+    {
+        /// <summary>  
+        /// True if the conversion exists, either as a widening or narrowing conversion, and false otherwise.
+        /// </summary>  
+        bool Exists { get; }
+
+        /// <summary>  
+        /// True if the conversion is an identity conversion, where the source and target types are equivalent, and false otherwise.
+        /// </summary>  
+        bool IsIdentity { get; }
+
+        /// <summary>  
+        /// True if and only if the conversion is a widening conversion.  
+        /// </summary>  
+        bool IsWidening { get; }
+
+        /// <summary>  
+        /// True if and only if the conversion is a narrowing conversion.  
+        /// </summary>  
+        bool IsNarrowing { get; }
+
+        /// <summary>  
+        /// True if and only if the conversion is between numeric types.
+        /// </summary>  
+        bool IsNumeric { get; }
+
+        /// <summary>  
+        /// True if the conversion is a widening or narrowing nullable conversion, and false otherwise.
+        /// </summary>  
+        bool IsNullable { get; }
+
+        /// <summary>  
+        /// True if the conversion is a widening or narrowing reference conversion, and false otherwise.
+        /// </summary>  
+        bool IsReference { get; }
+
+        /// <summary>  
+        /// True if and only if the conversion converts a default value ('null' in C#, 'Nothing' in Visual Basic) to a specific type.
+        /// </summary>  
+        bool IsDefaultValue { get; }
+
+        /// <summary>
+        /// True if and only if the conversion is performed by an operator method.
+        /// </summary>
+        bool UsesOperatorMethod { get; }
+
+        /// <summary>
+        /// Operator method used by the conversion, null if the conversion does not use an operator method.
+        /// </summary>
+        IMethodSymbol OperatorMethod { get; }
+    }
+
+    /// <summary>
     /// Represents a C# ?: or VB If expression.
     /// </summary>
     /// <remarks>
