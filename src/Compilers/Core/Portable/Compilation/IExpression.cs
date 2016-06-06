@@ -887,59 +887,6 @@ namespace Microsoft.CodeAnalysis.Semantics
     }
 
     /// <summary>
-    /// Represents a conversion operation.
-    /// </summary>
-    /// <remarks>
-    /// This interface is reserved for implementation by its associated APIs. We reserve the right to
-    /// change it in the future.
-    /// </remarks>
-    public interface IConversionExpression : IHasOperatorMethodExpression
-    {
-        /// <summary>
-        /// Value to be converted.
-        /// </summary>
-        IOperation Operand { get; }
-        /// <summary>
-        /// Kind of conversion.
-        /// </summary>
-        ConversionKind ConversionKind { get; }
-
-        /// <summary>
-        /// Semantic details of the conversion.
-        /// </summary>
-        IConversion ConversionDetails { get; }
-
-        /// <summary>
-        /// True if and only if the conversion is indicated explicity by a cast operation in the source code.
-        /// </summary>
-        bool IsPresentInSource { get; }
-    }
-
-    /// <summary>
-    /// Kinds of conversions.
-    /// </summary>
-    public enum ConversionKind
-    {
-        None = 0x0,
-        /// <summary>
-        /// Conversion is defined by the underlying type system and throws an exception if it fails.
-        /// </summary>
-        Cast = 0x1,
-        /// <summary>
-        /// Conversion is defined by the underlying type system and produces a null result if it fails.
-        /// </summary>
-        TryCast = 0x2,
-        /// <summary>
-        /// Conversion has VB-specific semantics.
-        /// </summary>
-        Basic = 0x3,
-        /// <summary>
-        /// Conversion has C#-specific semantics.
-        /// </summary>
-        CSharp = 0x4
-    }
-
-    /// <summary>
     /// Represents semantic characteristics of a particular conversion.
     /// </summary>
     /// <remarks>
@@ -997,6 +944,59 @@ namespace Microsoft.CodeAnalysis.Semantics
         /// False if the conversion exists as a valid widening or narrowing conversion, and true otherwise.
         /// </summary>  
         bool IsInvalid { get; }
+    }
+
+    /// <summary>
+    /// Represents a conversion operation.
+    /// </summary>
+    /// <remarks>
+    /// This interface is reserved for implementation by its associated APIs. We reserve the right to
+    /// change it in the future.
+    /// </remarks>
+    public interface IConversionExpression : IHasOperatorMethodExpression
+    {
+        /// <summary>
+        /// Value to be converted.
+        /// </summary>
+        IOperation Operand { get; }
+        /// <summary>
+        /// Kind of conversion.
+        /// </summary>
+        ConversionKind ConversionKind { get; }
+
+        /// <summary>
+        /// Semantic details of the conversion.
+        /// </summary>
+        IConversion ConversionDetails { get; }
+
+        /// <summary>
+        /// True if and only if the conversion is indicated explicity by a cast operation in the source code.
+        /// </summary>
+        bool IsPresentInSource { get; }
+    }
+
+    /// <summary>
+    /// Kinds of conversions.
+    /// </summary>
+    public enum ConversionKind
+    {
+        None = 0x0,
+        /// <summary>
+        /// Conversion is defined by the underlying type system and throws an exception if it fails.
+        /// </summary>
+        Cast = 0x1,
+        /// <summary>
+        /// Conversion is defined by the underlying type system and produces a null result if it fails.
+        /// </summary>
+        TryCast = 0x2,
+        /// <summary>
+        /// Conversion has VB-specific semantics.
+        /// </summary>
+        Basic = 0x3,
+        /// <summary>
+        /// Conversion has C#-specific semantics.
+        /// </summary>
+        CSharp = 0x4
     }
 
     /// <summary>
