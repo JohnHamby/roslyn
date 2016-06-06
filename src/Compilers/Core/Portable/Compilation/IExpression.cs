@@ -903,10 +903,16 @@ namespace Microsoft.CodeAnalysis.Semantics
         /// Kind of conversion.
         /// </summary>
         ConversionKind ConversionKind { get; }
+
+        /// <summary>
+        /// Semantic details of the conversion.
+        /// </summary>
+        IConversion ConversionDetails { get; }
+
         /// <summary>
         /// True if and only if the conversion is indicated explicity by a cast operation in the source code.
         /// </summary>
-        bool IsExplicit { get; }
+        bool IsPresentInSource { get; }
     }
 
     /// <summary>
@@ -930,15 +936,7 @@ namespace Microsoft.CodeAnalysis.Semantics
         /// <summary>
         /// Conversion has C#-specific semantics.
         /// </summary>
-        CSharp = 0x4,
-        /// <summary>
-        /// Conversion is implemented by a conversion operator method.
-        /// </summary>
-        OperatorMethod = 0x5,
-        /// <summary>
-        /// Conversion is invalid.
-        /// </summary>
-        Invalid = 0xf
+        CSharp = 0x4
     }
 
     /// <summary>
@@ -950,11 +948,6 @@ namespace Microsoft.CodeAnalysis.Semantics
     /// </remarks>
     public interface IConversion
     {
-        /// <summary>  
-        /// True if the conversion exists, either as a widening or narrowing conversion, and false otherwise.
-        /// </summary>  
-        bool Exists { get; }
-
         /// <summary>  
         /// True if the conversion is an identity conversion, where the source and target types are equivalent, and false otherwise.
         /// </summary>  
@@ -999,6 +992,11 @@ namespace Microsoft.CodeAnalysis.Semantics
         /// Operator method used by the conversion, null if the conversion does not use an operator method.
         /// </summary>
         IMethodSymbol OperatorMethod { get; }
+
+        /// <summary>  
+        /// False if the conversion exists as a valid widening or narrowing conversion, and true otherwise.
+        /// </summary>  
+        bool IsInvalid { get; }
     }
 
     /// <summary>
